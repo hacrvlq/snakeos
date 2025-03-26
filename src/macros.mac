@@ -1,0 +1,127 @@
+%macro static_assert 1
+	%ifn (%1)
+		%error "Static assertion failed"
+	%endif
+%endmacro
+
+; ============================== [General Note - Calling Convention] ===============================
+; - arguments are passed on the stack and cleaned up by the callee
+; - return values are passed in 'eax'
+; - the value of all registers are preserved, except for 'eax'
+
+; macros for defining functions
+; Usage:
+;   fn <fn_name>
+;   <arg1_name>: arg <arg1_size>
+;   <arg2_name>: arg <arg2_size>
+;   ...
+;   <local1_name>: local <local1_size>
+;   <local2_name>: local <local2_size>
+;   ...
+;   <fn_body>
+;   endfn
+; Inside <fn_body>, args/local can be accessed using '[ebp+<arg_name>]' /
+; '[ebp+<local_name>]'.
+;
+; The function can be called as follows (note that the args are pushed in
+; reversed order):
+;   ...
+;   push <arg2_value>
+;   push <arg1_value>
+;   call <fn_name>
+%macro fn 1
+	%ifctx func
+		%error "Mismatched 'fn'/'endfn'"
+	%else
+		%push func
+
+		%assign %$_current_arg_offset 0
+		%assign %$_current_local_offset 0
+
+		%1:
+			pushad
+			mov ebp, esp
+	%endif
+%endmacro
+%macro arg 1
+	%ifnctx func
+		%error "Wrong Context"
+	%else
+		; NOTE: As 9 4-byte registers are pushed onto the stack after the args (1 by
+		;       'call', 8 by 'pushad'), an additional offset of 9 * 4 bytes is
+		;       required.
+		%00: equ %$_current_arg_offset + 9 * 4
+		%assign %$_current_arg_offset (%$_current_arg_offset + %1)
+	%endif
+%endmacro
+%macro local 1
+	%ifnctx func
+		%error "Wrong Context"
+	%else
+		%assign %$_current_local_offset (%$_current_local_offset + %1)
+		%00: equ (-%$_current_local_offset)
+			sub esp, %1
+	%endif
+%endmacro
+%macro endfn 0
+	%ifnctx func
+		%error "Mismatched 'fn'/'endfn'"
+	%else
+		mov esp, ebp
+		mov [esp + 7 * 4], eax
+		popad
+		ret %$_current_arg_offset
+
+		%pop
+	%endif
+%endmacro
+
+%macro unreachable 0
+	push dword _unreachable_msg
+	call panic
+%endmacro
+
+; NOTE: Both 'pushb' and 'memcpy' use the stack to store values without
+;       advancing 'esp'. This is fine as long as no interrupts occur, as these
+;       could corrupt the stored values.
+;       All code in `game.asm` is safe in that regard: 'init' is called before
+;       interrupts are enabled, 'tick' and 'keyboard_handler' are themselves
+;       called within an ISR, so they can't be interrupted by another interrupt.
+
+%macro pushb 1
+	; save the original value of 'al' on the stack without changing 'esp', as the
+	; pushed value may depend on the original value of 'esp'.
+	mov [esp - 2], al
+	mov al, %1
+	dec esp
+	mov [esp], al
+	mov al, [esp - 1]
+%endmacro
+
+; Usage: memcpy [<destination>], [<source>], <num_bytes>
+%macro memcpy 3
+	; save the original value of the registers on the stack without changing
+	; 'esp', as '<destination>' and '<source>' may depend on the original value of
+	; 'esp'.
+	mov [esp - 4], ecx
+	mov [esp - 8], esi
+	mov [esp - 12], edi
+
+	; Because '<destination>' can depend on 'esi', the original value of 'esi'
+	; needs to be restored when setting 'edi'.
+	lea esi, %2
+	mov [esp - 16], esi
+	mov esi, [esp - 8]
+	lea edi, %1
+	mov esi, [esp - 16]
+
+	; NOTE: '<num_bytes>' must not depend on 'esi' or 'edi', as these registers
+	;       are modified at this point.
+	mov ecx, %3
+	cld
+	rep movsb
+
+	mov ecx, [esp - 4]
+	mov esi, [esp - 8]
+	mov edi, [esp - 12]
+%endmacro

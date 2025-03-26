@@ -1,0 +1,606 @@
+section code
+
+; NOTE: called from `bootloader.asm`
+_entry32:
+	; NOTE: the offset 0x10 corresponds to the data segment
+	mov ax, 0x10
+	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
+	mov ss, ax
+
+	; NOTE: 0x6bE00 to 0x7FFFF (80.5 KiB) are reserved for the stack
+	mov esp, 0x80000
+	mov ebp, esp
+
+	mov byte [_pit_masked], 0
+	call _remap_pic
+	lidt [_idtr]
+
+	call _seed_rng
+
+	; NOTE: 'init' is located in `game.asm`
+	call init
+
+	; handle keyboard and timer interrupts
+	sti
+	.wait: hlt
+	jmp .wait
+
+; ==================================================================================================
+; Interrupts
+; ==================================================================================================
+
+%define PIC1_COMMAND_PORT 0x20
+%define PIC1_DATA_PORT 0x21
+%define PIC2_COMMAND_PORT 0xA0
+%define PIC2_DATA_PORT 0xA1
+
+fn _remap_pic
+	; initialization command
+	mov al, 0x11
+	out PIC1_COMMAND_PORT, al
+	call io_wait
+	out PIC2_COMMAND_PORT, al
+	call io_wait
+
+	; interrupt offset
+	mov al, 32
+	out PIC1_DATA_PORT, al
+	call io_wait
+	; as all interrupts of PIC2 are masked, this doesn't matter
+	out PIC2_DATA_PORT, al
+	call io_wait
+
+	; cascade setup
+	mov al, 0x04
+	out PIC1_DATA_PORT, al
+	call io_wait
+	mov al, 0x02
+	out PIC2_DATA_PORT, al
+	call io_wait
+
+	; use 8086 mode
+	mov al, 0x01
+	out PIC1_DATA_PORT, al
+	call io_wait
+	out PIC2_DATA_PORT, al
+	call io_wait
+
+	; mask everything except IRQ 0 (PIT) and IRQ 1 (keyboard)
+	mov al, ~0b11
+	out PIC1_DATA_PORT, al
+	call io_wait
+	; mask everything
+	mov al, 0xff
+	out PIC2_DATA_PORT, al
+endfn
+
+_keyboard_isr:
+	pushad
+
+	; get the keycode
+	in al, 0x60
+	pushb al
+	; NOTE: 'keyboard_handler' is located in `game.asm`
+	call keyboard_handler
+
+	; acknowledge the interrupt
+	mov al, 0x20
+	out PIC1_COMMAND_PORT, al
+
+	popad
+	iret
+
+; handle exceptions by panicking
+%assign i 0
+%rep 32
+exception_%+i%+_isr:
+	push dword _exception_%+i%+_name
+	call panic
+%assign i i+1
+%endrep
+
+struc idt_entry_t
+	.isr_low: resb 2
+	.kernel_cs: resb 2
+	.reserved: resb 1
+	.attributes: resb 1
+	.isr_high: resb 2
+endstruc
+_idtr:
+	.limit: dw _idt_end - _idt - 1
+	.base: dd _idt
+_idt:
+
+%assign i 0
+%rep 32
+istruc idt_entry_t
+	at .isr_low, dw exception_%+i%+_isr
+	at .kernel_cs, dw 0x08
+	at .reserved, db 0
+	; As all exceptions are handled by panicking, it doesn't matter whether it's a
+	; trap or an interrupt gate.
+	at .attributes, db 0b1000_1110
+	at .isr_high, dw 0
+iend
+%assign i i+1
+%endrep
+
+istruc idt_entry_t
+	at .isr_low, dw _pit_isr
+	at .kernel_cs, dw 0x08
+	at .reserved, db 0
+	at .attributes, db 0b1000_1110
+	at .isr_high, dw 0
+iend
+istruc idt_entry_t
+	at .isr_low, dw _keyboard_isr
+	at .kernel_cs, dw 0x08
+	at .reserved, db 0
+	at .attributes, db 0b1000_1110
+	at .isr_high, dw 0
+iend
+_idt_end:
+
+_exception_0_name: db "Division Error", 0
+_exception_1_name: db "Debug Trap", 0
+_exception_2_name: db "Non-maskable Interrupt", 0
+_exception_3_name: db "Breakpoint Trap", 0
+_exception_4_name: db "Overflow", 0
+_exception_5_name: db "Bound Range Exceeded", 0
+_exception_6_name: db "Invalid Opcode", 0
+_exception_7_name: db "Device Not Available", 0
+_exception_8_name: db "Double Fault", 0
+_exception_9_name: db "Coprocessor Segment Overrun", 0
+_exception_10_name: db "Invalid TSS", 0
+_exception_11_name: db "Segment Not Present", 0
+_exception_12_name: db "Stack-Segment Fault", 0
+_exception_13_name: db "General Protection Fault", 0
+_exception_14_name: db "Page Fault", 0
+_exception_16_name: db "x87 Floating-Point Exception", 0
+_exception_17_name: db "Alignment Check", 0
+_exception_18_name: db "Machine Check", 0
+_exception_19_name: db "SIMD Floating-Point Exception", 0
+_exception_20_name: db "Virtualization Exception", 0
+_exception_21_name: db "Control Protection Exception", 0
+_exception_28_name: db "Hypervisor Injection Exception", 0
+_exception_29_name: db "VMM Communication Exception", 0
+_exception_30_name: db "Security Exception", 0
+_exception_15_name:
+_exception_22_name:
+_exception_23_name:
+_exception_24_name:
+_exception_25_name:
+_exception_26_name:
+_exception_27_name:
+_exception_31_name: db "Reserved Exception", 0
+
+; ==================================================================================================
+; Programmable Interrupt Timer (PIT)
+; ==================================================================================================
+
+%define PIT_CHANNEL_0_PORT 0x40
+%define PIT_COMMAND_PORT 0x43
+
+; setup the PIT to call 'tick' (`game.asm`) with a frequency of
+; 1193182/'.divisor' Hz
+fn setup_pit
+.divisor: arg 2
+
+	; a divisor of 1 must not be used with mode 2
+	cmp word [ebp+.divisor], 1
+	jne .valid_divisor
+	unreachable
+	.valid_divisor:
+
+	; setup mode 2
+	mov al, 0b00_11_010_0
+	out PIT_COMMAND_PORT, al
+	call io_wait
+
+	mov ax, [ebp+.divisor]
+	out PIT_CHANNEL_0_PORT, ax
+	call io_wait
+	mov al, ah
+	out PIT_CHANNEL_0_PORT, al
+	call io_wait
+
+	mov byte [_pit_masked], 1
+endfn
+
+_pit_isr:
+	pushad
+
+	cmp byte [_pit_masked], 0
+	je .skip_handler
+	; NOTE: 'tick' is located in `game.asm`
+	call tick
+	.skip_handler:
+
+	; acknowledge the interrupt
+	mov al, 0x20
+	out PIC1_COMMAND_PORT, al
+
+	popad
+	iret
+
+; ==================================================================================================
+; Random number generator
+; ==================================================================================================
+
+%define CMOS_REG_PORT 0x70
+%define CMOS_DATA_PORT 0x71
+
+; seed the rng with the current time
+; NOTE: This code doesn't respect the "Update in Progress" flag of the RTC and
+;       the format (BCD/binary, 12h/24h), but since the resulting value is only
+;       used to seed the RNG, this is fine.
+fn _seed_rng
+	xor eax, eax
+
+	; seconds
+	out CMOS_REG_PORT, al
+	call io_wait
+	in al, CMOS_DATA_PORT
+	shl eax, 8
+
+	; minutes
+	mov al, 0x02
+	out CMOS_REG_PORT, al
+	call io_wait
+	in al, CMOS_DATA_PORT
+	shl eax, 8
+
+	; hours
+	mov al, 0x04
+	out CMOS_REG_PORT, al
+	call io_wait
+	in al, CMOS_DATA_PORT
+	shl eax, 8
+
+	; day of month
+	mov al, 0x07
+	out CMOS_REG_PORT, al
+	in al, CMOS_DATA_PORT
+
+	mov [_rng_value], eax
+endfn
+
+; RNG from Numerical Recipes, Section 7.1.7, G1
+%define RNG_B1 13
+%define RNG_B2 17
+%define RNG_B3 5
+fn get_random
+	; NOTE: When '_rng_value' == 0, the future RNG value remains at 0. This can
+	;       happen when the RNG is seeded with 0, in which case '_rng_value' is
+	;       set to 1.
+	cmp dword [_rng_value], 0
+	jne .nonzero_value
+	mov dword [_rng_value], 1
+	.nonzero_value:
+
+	mov eax, [_rng_value]
+	shr eax, RNG_B1
+	xor [_rng_value], eax
+
+	mov eax, [_rng_value]
+	shl eax, RNG_B2
+	xor [_rng_value], eax
+
+	mov eax, [_rng_value]
+	shr eax, RNG_B3
+	xor [_rng_value], eax
+
+	mov eax, [_rng_value]
+endfn
+
+; ==================================================================================================
+; Graphics
+; ==================================================================================================
+
+%define FB_PTR 0xA0000
+%define FB_WIDTH 320
+%define FB_HEIGHT 200
+%define FB_SIZE (FB_WIDTH * FB_HEIGHT)
+
+%define DAC_WRITE_REG_PORT 0x3C8
+%define DAC_DATA_PORT 0x3C9
+fn set_vga_palette
+.palette: arg 4
+
+	mov esi, [ebp+.palette]
+
+	; overwrite the palette starting from the first color
+	xor al, al
+	mov dx, DAC_WRITE_REG_PORT
+	out dx, al
+
+	mov dx, DAC_DATA_PORT
+	mov ecx, 255 * 3
+	.loop:
+		mov al, [esi]
+		out dx, al
+		inc esi
+	loop .loop
+endfn
+
+fn clear_screen_buf
+	xor al, al
+	mov edi, screen_buf
+	mov ecx, FB_SIZE
+	rep stosb
+endfn
+fn flush_screen_buf
+	mov esi, screen_buf
+	mov edi, FB_PTR
+	mov ecx, FB_SIZE
+	cld
+	rep movsb
+endfn
+
+fn draw_str
+.str: arg 4
+.pos: arg 4
+.scale: arg 4
+.color: arg 1
+
+	mov esi, [ebp+.str]
+	mov edi, [ebp+.pos]
+
+	.loop:
+		cld
+		lodsb
+		test al, al
+		jz .end_loop
+
+		pushb [ebp+.color]
+		push dword [ebp+.scale]
+		push edi
+		pushb al
+		call draw_char
+
+		mov ebx, [ebp+.scale]
+		lea edi, [edi + 8 * ebx]
+	jmp .loop
+	.end_loop:
+endfn
+fn draw_char
+.char: arg 1
+.pos: arg 4
+.scale: arg 4
+.color: arg 1
+
+	movzx eax, byte [ebp+.char]
+	; NOTE: '_font' contains only the printable ascii chars (starting from space)
+	sub eax, ' '
+	cmp eax, 95
+	jb .printable_char
+	unreachable
+	.printable_char:
+
+	lea esi, [_font + 8 * eax]
+	mov edi, [ebp+.pos]
+
+	mov cl, 8
+	.vert_loop:
+		; 'bl' contains the bitmask for the current horizontal line, with the most
+		; significant bit representing the leftmost pixel
+		mov byte bl, [esi]
+		mov ch, 8
+		.hor_loop:
+			test bl, 1 << 7
+			jz .skip_pixel
+			pushb [ebp+.color]
+			push dword [ebp+.scale]
+			push edi
+			call _draw_super_pixel
+			.skip_pixel:
+
+			add edi, [ebp+.scale]
+			shl bl, 1
+			dec ch
+		jnz .hor_loop
+
+		inc esi
+		; move 'edi' to the beginning of the next line respecting '.scale'
+		mov eax, FB_WIDTH - 8
+		mov ebx, [ebp+.scale]
+		mul ebx
+		add edi, eax
+		dec cl
+	jnz .vert_loop
+endfn
+; draws a quad with '.size' to '.pos'
+fn _draw_super_pixel
+.pos: arg 4
+.size: arg 4
+.color: arg 1
+
+	mov edi, [ebp+.pos]
+	add edi, screen_buf
+
+	mov al, [ebp+.color]
+	mov ecx, [ebp+.size]
+	.vert_loop:
+		mov edx, [ebp+.size]
+		.hor_loop:
+			mov [edi], al
+			inc edi
+			dec edx
+		jnz .hor_loop
+
+		add edi, FB_WIDTH
+		sub edi, [ebp+.size]
+	loop .vert_loop
+endfn
+
+fn panic
+.msg: arg 4
+
+	; clear the top 8 rows of 'screen_buf' to make a black background for the
+	; message
+	xor al, al
+	mov edi, screen_buf
+	mov ecx, 8 * FB_WIDTH
+	cld
+	rep stosb
+
+	; NOTE: 0x07 should always be a a good color for text, even in the custom
+	;       palette
+	pushb 0x07 ; color
+	push dword 1 ; scale
+	push dword 0 ; pos
+	push dword [ebp+.msg]
+	call draw_str
+
+	call flush_screen_buf
+
+	cli
+	.halt: hlt
+	jmp .halt
+endfn
+
+; converts '.num' to a string and stores the result in '.buf'
+fn num_to_str
+.num: arg 2
+.buf: arg 4
+
+	; push the digits (as chars) onto the stack from least to most significand
+	movzx eax, word [ebp+.num]
+	mov ebx, 10
+	; count the number of chars with 'ecx' (starts with 1 to accommodate the null
+	; termination)
+	mov ecx, 1
+	pushb 0 ; null termination
+	.loop:
+		xor edx, edx
+		div ebx
+		add dl, '0'
+		pushb dl
+		inc ecx
+		test eax, eax
+	jnz .loop
+
+	; NOTE: as the stack grows down, the digits are now ordered correctly
+	mov edi, [ebp+.buf]
+	memcpy [edi], [esp], ecx
+endfn
+
+; 8x8 font taken from seabios (https://git.seabios.org/seabios.git, commit
+; df9dd418, file `src/font.c`), where it is claimed to be public domain and
+; (c) by Joseph Gil
+_font: db \
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
+	0x30, 0x78, 0x78, 0x30, 0x30, 0x00, 0x30, 0x00, \
+	0x6c, 0x6c, 0x6c, 0x00, 0x00, 0x00, 0x00, 0x00, \
+	0x6c, 0x6c, 0xfe, 0x6c, 0xfe, 0x6c, 0x6c, 0x00, \
+	0x30, 0x7c, 0xc0, 0x78, 0x0c, 0xf8, 0x30, 0x00, \
+	0x00, 0xc6, 0xcc, 0x18, 0x30, 0x66, 0xc6, 0x00, \
+	0x38, 0x6c, 0x38, 0x76, 0xdc, 0xcc, 0x76, 0x00, \
+	0x60, 0x60, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, \
+	0x18, 0x30, 0x60, 0x60, 0x60, 0x30, 0x18, 0x00, \
+	0x60, 0x30, 0x18, 0x18, 0x18, 0x30, 0x60, 0x00, \
+	0x00, 0x66, 0x3c, 0xff, 0x3c, 0x66, 0x00, 0x00, \
+	0x00, 0x30, 0x30, 0xfc, 0x30, 0x30, 0x00, 0x00, \
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x30, 0x60, \
+	0x00, 0x00, 0x00, 0xfc, 0x00, 0x00, 0x00, 0x00, \
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x30, 0x00, \
+	0x06, 0x0c, 0x18, 0x30, 0x60, 0xc0, 0x80, 0x00, \
+	0x7c, 0xc6, 0xce, 0xde, 0xf6, 0xe6, 0x7c, 0x00, \
+	0x30, 0x70, 0x30, 0x30, 0x30, 0x30, 0xfc, 0x00, \
+	0x78, 0xcc, 0x0c, 0x38, 0x60, 0xcc, 0xfc, 0x00, \
+	0x78, 0xcc, 0x0c, 0x38, 0x0c, 0xcc, 0x78, 0x00, \
+	0x1c, 0x3c, 0x6c, 0xcc, 0xfe, 0x0c, 0x1e, 0x00, \
+	0xfc, 0xc0, 0xf8, 0x0c, 0x0c, 0xcc, 0x78, 0x00, \
+	0x38, 0x60, 0xc0, 0xf8, 0xcc, 0xcc, 0x78, 0x00, \
+	0xfc, 0xcc, 0x0c, 0x18, 0x30, 0x30, 0x30, 0x00, \
+	0x78, 0xcc, 0xcc, 0x78, 0xcc, 0xcc, 0x78, 0x00, \
+	0x78, 0xcc, 0xcc, 0x7c, 0x0c, 0x18, 0x70, 0x00, \
+	0x00, 0x30, 0x30, 0x00, 0x00, 0x30, 0x30, 0x00, \
+	0x00, 0x30, 0x30, 0x00, 0x00, 0x30, 0x30, 0x60, \
+	0x18, 0x30, 0x60, 0xc0, 0x60, 0x30, 0x18, 0x00, \
+	0x00, 0x00, 0xfc, 0x00, 0x00, 0xfc, 0x00, 0x00, \
+	0x60, 0x30, 0x18, 0x0c, 0x18, 0x30, 0x60, 0x00, \
+	0x78, 0xcc, 0x0c, 0x18, 0x30, 0x00, 0x30, 0x00, \
+	0x7c, 0xc6, 0xde, 0xde, 0xde, 0xc0, 0x78, 0x00, \
+	0x30, 0x78, 0xcc, 0xcc, 0xfc, 0xcc, 0xcc, 0x00, \
+	0xfc, 0x66, 0x66, 0x7c, 0x66, 0x66, 0xfc, 0x00, \
+	0x3c, 0x66, 0xc0, 0xc0, 0xc0, 0x66, 0x3c, 0x00, \
+	0xf8, 0x6c, 0x66, 0x66, 0x66, 0x6c, 0xf8, 0x00, \
+	0xfe, 0x62, 0x68, 0x78, 0x68, 0x62, 0xfe, 0x00, \
+	0xfe, 0x62, 0x68, 0x78, 0x68, 0x60, 0xf0, 0x00, \
+	0x3c, 0x66, 0xc0, 0xc0, 0xce, 0x66, 0x3e, 0x00, \
+	0xcc, 0xcc, 0xcc, 0xfc, 0xcc, 0xcc, 0xcc, 0x00, \
+	0x78, 0x30, 0x30, 0x30, 0x30, 0x30, 0x78, 0x00, \
+	0x1e, 0x0c, 0x0c, 0x0c, 0xcc, 0xcc, 0x78, 0x00, \
+	0xe6, 0x66, 0x6c, 0x78, 0x6c, 0x66, 0xe6, 0x00, \
+	0xf0, 0x60, 0x60, 0x60, 0x62, 0x66, 0xfe, 0x00, \
+	0xc6, 0xee, 0xfe, 0xfe, 0xd6, 0xc6, 0xc6, 0x00, \
+	0xc6, 0xe6, 0xf6, 0xde, 0xce, 0xc6, 0xc6, 0x00, \
+	0x38, 0x6c, 0xc6, 0xc6, 0xc6, 0x6c, 0x38, 0x00, \
+	0xfc, 0x66, 0x66, 0x7c, 0x60, 0x60, 0xf0, 0x00, \
+	0x78, 0xcc, 0xcc, 0xcc, 0xdc, 0x78, 0x1c, 0x00, \
+	0xfc, 0x66, 0x66, 0x7c, 0x6c, 0x66, 0xe6, 0x00, \
+	0x78, 0xcc, 0xe0, 0x70, 0x1c, 0xcc, 0x78, 0x00, \
+	0xfc, 0xb4, 0x30, 0x30, 0x30, 0x30, 0x78, 0x00, \
+	0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xfc, 0x00, \
+	0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0x78, 0x30, 0x00, \
+	0xc6, 0xc6, 0xc6, 0xd6, 0xfe, 0xee, 0xc6, 0x00, \
+	0xc6, 0xc6, 0x6c, 0x38, 0x38, 0x6c, 0xc6, 0x00, \
+	0xcc, 0xcc, 0xcc, 0x78, 0x30, 0x30, 0x78, 0x00, \
+	0xfe, 0xc6, 0x8c, 0x18, 0x32, 0x66, 0xfe, 0x00, \
+	0x78, 0x60, 0x60, 0x60, 0x60, 0x60, 0x78, 0x00, \
+	0xc0, 0x60, 0x30, 0x18, 0x0c, 0x06, 0x02, 0x00, \
+	0x78, 0x18, 0x18, 0x18, 0x18, 0x18, 0x78, 0x00, \
+	0x10, 0x38, 0x6c, 0xc6, 0x00, 0x00, 0x00, 0x00, \
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, \
+	0x30, 0x30, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, \
+	0x00, 0x00, 0x78, 0x0c, 0x7c, 0xcc, 0x76, 0x00, \
+	0xe0, 0x60, 0x60, 0x7c, 0x66, 0x66, 0xdc, 0x00, \
+	0x00, 0x00, 0x78, 0xcc, 0xc0, 0xcc, 0x78, 0x00, \
+	0x1c, 0x0c, 0x0c, 0x7c, 0xcc, 0xcc, 0x76, 0x00, \
+	0x00, 0x00, 0x78, 0xcc, 0xfc, 0xc0, 0x78, 0x00, \
+	0x38, 0x6c, 0x60, 0xf0, 0x60, 0x60, 0xf0, 0x00, \
+	0x00, 0x00, 0x76, 0xcc, 0xcc, 0x7c, 0x0c, 0xf8, \
+	0xe0, 0x60, 0x6c, 0x76, 0x66, 0x66, 0xe6, 0x00, \
+	0x30, 0x00, 0x70, 0x30, 0x30, 0x30, 0x78, 0x00, \
+	0x0c, 0x00, 0x0c, 0x0c, 0x0c, 0xcc, 0xcc, 0x78, \
+	0xe0, 0x60, 0x66, 0x6c, 0x78, 0x6c, 0xe6, 0x00, \
+	0x70, 0x30, 0x30, 0x30, 0x30, 0x30, 0x78, 0x00, \
+	0x00, 0x00, 0xcc, 0xfe, 0xfe, 0xd6, 0xc6, 0x00, \
+	0x00, 0x00, 0xf8, 0xcc, 0xcc, 0xcc, 0xcc, 0x00, \
+	0x00, 0x00, 0x78, 0xcc, 0xcc, 0xcc, 0x78, 0x00, \
+	0x00, 0x00, 0xdc, 0x66, 0x66, 0x7c, 0x60, 0xf0, \
+	0x00, 0x00, 0x76, 0xcc, 0xcc, 0x7c, 0x0c, 0x1e, \
+	0x00, 0x00, 0xdc, 0x76, 0x66, 0x60, 0xf0, 0x00, \
+	0x00, 0x00, 0x7c, 0xc0, 0x78, 0x0c, 0xf8, 0x00, \
+	0x10, 0x30, 0x7c, 0x30, 0x30, 0x34, 0x18, 0x00, \
+	0x00, 0x00, 0xcc, 0xcc, 0xcc, 0xcc, 0x76, 0x00, \
+	0x00, 0x00, 0xcc, 0xcc, 0xcc, 0x78, 0x30, 0x00, \
+	0x00, 0x00, 0xc6, 0xd6, 0xfe, 0xfe, 0x6c, 0x00, \
+	0x00, 0x00, 0xc6, 0x6c, 0x38, 0x6c, 0xc6, 0x00, \
+	0x00, 0x00, 0xcc, 0xcc, 0xcc, 0x7c, 0x0c, 0xf8, \
+	0x00, 0x00, 0xfc, 0x98, 0x30, 0x64, 0xfc, 0x00, \
+	0x1c, 0x30, 0x30, 0xe0, 0x30, 0x30, 0x1c, 0x00, \
+	0x18, 0x18, 0x18, 0x00, 0x18, 0x18, 0x18, 0x00, \
+	0xe0, 0x30, 0x30, 0x1c, 0x30, 0x30, 0xe0, 0x00, \
+	0x76, 0xdc, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+
+; small imprecise delay, used to give potentially slow IO devices more time
+fn io_wait
+	mov ecx, 5
+	.loop:
+		in al, 0x80
+	loop .loop
+endfn
+
+_unreachable_msg: db "Internal Error", 0
+
+section bss
+_pit_masked: resb 1
+; used to build the next frame, which can then be displayed with
+; 'flush_screen_buf'
+screen_buf: resb FB_SIZE
+_rng_value: resb 4
