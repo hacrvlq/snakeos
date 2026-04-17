@@ -42,6 +42,7 @@ fn _remap_pic
 	mov al, 0x11
 	out PIC1_COMMAND_PORT, al
 	call io_wait
+	mov al, 0x11
 	out PIC2_COMMAND_PORT, al
 	call io_wait
 
@@ -65,6 +66,7 @@ fn _remap_pic
 	mov al, 0x01
 	out PIC1_DATA_PORT, al
 	call io_wait
+	mov al, 0x01
 	out PIC2_DATA_PORT, al
 	call io_wait
 
