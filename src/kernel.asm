@@ -202,10 +202,11 @@ fn setup_pit
 	out PIT_COMMAND_PORT, al
 	call io_wait
 
-	mov ax, [ebp+.divisor]
-	out PIT_CHANNEL_0_PORT, ax
+	mov dx, [ebp+.divisor]
+	mov al, dl
+	out PIT_CHANNEL_0_PORT, al
 	call io_wait
-	mov al, ah
+	mov al, dh
 	out PIT_CHANNEL_0_PORT, al
 	call io_wait
 
