@@ -332,7 +332,9 @@ deathscreen_str_enter: db "Enter", 0
 %define SNAKE_SIZE 8
 %define TARGET_SIZE SNAKE_SIZE
 ; in pixels / second
-%define SNAKE_SPEED 30
+%define SNAKE_SPEED_1_PLAYER 30
+%define SNAKE_SPEED_2_PLAYER 34
+%define SNAKE_SPEED_3_PLAYER 33
 %define SNAKE_TURN_GAP 1
 ; length increase of the snake upon reaching a target
 %define SNAKE_TARGET_GROWTH (2 * SNAKE_SIZE)
@@ -384,9 +386,10 @@ fn setup_gamescreen
 	; freq = 1193182 / divisor
 	; thus, the divisor must be:
 	; divisor = 1193182 / freq
-	%define GAME_PIT_DIVISOR (1193182 / SNAKE_SPEED)
-	static_assert {GAME_PIT_DIVISOR >= 1}
-	push word GAME_PIT_DIVISOR
+	mov dx, (1193182 & 0xFFFF0000) >> 16
+	mov ax, 1193182 & 0xFFFF
+	div word [snake_speed]
+	push ax
 	call setup_pit
 endfn
 
@@ -525,15 +528,18 @@ static_assert {INIT_SNAKE_POS_Y > 0}
 fn setup_snakes
 .num_snakes: arg 1
 
+	mov word [snake_speed], SNAKE_SPEED_1_PLAYER
 	cmp byte [ebp+.num_snakes], 1
-	je .case_1
+	je .setup_1_snake
+	mov word [snake_speed], SNAKE_SPEED_2_PLAYER
 	cmp byte [ebp+.num_snakes], 2
-	je .case_2_or_3
+	je .setup_3_snakes
+	mov word [snake_speed], SNAKE_SPEED_3_PLAYER
 	cmp byte [ebp+.num_snakes], 3
-	je .case_2_or_3
+	je .setup_3_snakes
 	unreachable
 
-	.case_1:
+	.setup_1_snake:
 	push dword INIT_SNAKE_LEN
 	pushb 1 ; dir
 	push dword INIT_SNAKE_POS_MIDDLE
@@ -542,7 +548,7 @@ fn setup_snakes
 	jmp .end_switch
 
 	; setup all 3 snakes, although not all are necessarily used
-	.case_2_or_3:
+	.setup_3_snakes:
 	push dword INIT_SNAKE_LEN
 	pushb 1 ; dir
 	push dword INIT_SNAKE_POS_LEFT
@@ -1067,10 +1073,11 @@ fn handle_endgame_countdown
 	cmp word [endgame_countdown], 0
 	jle .ret
 
-	; As the game runs at a frequency of 'SNAKE_SPEED' Hz, ticks must be
+	; As the game runs at a frequency of 'snake_speed' Hz, ticks must be
 	; accumulated in order to update the countdown at 1 Hz.
 	inc word [endgame_countdown_substep]
-	cmp word [endgame_countdown_substep], SNAKE_SPEED
+	mov ax, [snake_speed]
+	cmp word [endgame_countdown_substep], ax
 	jb .ret
 
 	dec word [endgame_countdown]
@@ -1527,6 +1534,8 @@ snakes:
 snake1: resb snake_t_size
 snake2: resb snake_t_size
 snake3: resb snake_t_size
+; in pixels / second
+snake_speed: resb 2
 
 num_targets: resb 1
 ; contains the position of every target,
