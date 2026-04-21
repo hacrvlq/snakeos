@@ -622,11 +622,24 @@ fn setup_targets
 		cmp al, [ebp+.num_targets]
 	jb .loop
 endfn
+; NOTE: Because the world frame is one pixel wide, the x and y coordinates of
+;       targets range between 1 and 'WORLD_SIZE' - 'TARGET_SIZE' - 1.
+%define TARGET_COORD_RANGE (WORLD_SIZE - TARGET_SIZE - 2)
 ; NOTE: depends on 'object_buf'
 fn setup_target
 .target_idx: arg 1
 
+	; There are N := ('WORLD_SIZE' - 'TARGET_SIZE' - 2)^2 possible positions for
+	; the target. This function places the target at a random unoccupied position
+	; by testing N random positions. If none are found, all positions are tested
+	; and the first unoccupied is picked.
+	; This fallback should rarely happen. If there are still n unoccupied
+	; positions, the probability of not finding one of those is:
+	; (1 - n/N)^N approx exp(-n) for n << N
+
 	movzx edx, byte [ebp+.target_idx]
+
+	mov ecx, TARGET_COORD_RANGE * TARGET_COORD_RANGE
 	.loop:
 		call get_random_target_pos
 		mov [targets + 4 * (edx - 1)], eax
@@ -634,24 +647,54 @@ fn setup_target
 		push eax
 		call check_target_pos
 		test eax, eax
-	jz .loop
+		jnz .ret
+	loop .loop
+
+	mov edi, 1 + 1 * FB_WIDTH
+	mov cl, TARGET_COORD_RANGE
+	.vert_loop:
+		mov ch, TARGET_COORD_RANGE
+		.hor_loop:
+			mov [targets + 4 * (edx - 1)], edi
+			pushb [ebp+.target_idx]
+			push edi
+			call check_target_pos
+			test eax, eax
+			jnz .ret
+			inc edi
+			dec ch
+		jnz .hor_loop
+		add edi, FB_WIDTH - TARGET_COORD_RANGE
+		dec cl
+	jnz .vert_loop
+
+	; if there is no unoccupied position to place the target, shorten the snakes
+	mov esi, snakes
+	movzx ecx, byte [num_snakes]
+	.snake_loop:
+		mov dword [esi+snake_t.len], INIT_SNAKE_LEN
+		add esi, snake_t_size
+	loop .snake_loop
+
+	call fill_object_buf
+	pushb [ebp+.target_idx]
+	call setup_target
+
+	.ret:
 endfn
 fn get_random_target_pos
 .x: local 4
 .y: local 4
 
-	; NOTE: Because the world frame is one pixel wide, the valid range for the x
-	;       and y coordinates of a target is between 1 and
-	;       'WORLD_SIZE' - 'TARGET_SIZE' - 1.
 	call get_random
 	xor edx, edx
-	mov ebx, WORLD_SIZE - TARGET_SIZE - 2
+	mov ebx, TARGET_COORD_RANGE
 	div ebx
 	inc edx
 	mov [ebp+.x], edx
 	call get_random
 	xor edx, edx
-	mov ebx, WORLD_SIZE - TARGET_SIZE - 2
+	mov ebx, TARGET_COORD_RANGE
 	div ebx
 	inc edx
 	mov [ebp+.y], edx
