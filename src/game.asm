@@ -62,6 +62,10 @@ endfn
 fn setup_titlescreen
 	mov byte [active_screen], TITLESCREEN_ID
 
+	mov dword [points_p1], 0
+	mov dword [points_p2], 0
+	mov dword [points_p3], 0
+
 	; setup the PIT with the lowest possible frequency
 	push word 65535
 	call setup_pit
@@ -261,7 +265,9 @@ endfn
 %define DEATHSCREEN_HEADING_POS (16 * (FB_WIDTH + 1))
 %define DEATHSCREEN_HEADING_SHADOW_OFFSET (2 * (FB_WIDTH - 1))
 
-%define DEATHSCREEN_SCORES_POS (80 * FB_WIDTH + FB_WIDTH / 2 - 28)
+%define DEATHSCREEN_SCORES_MIDDLE_POS (80 * FB_WIDTH + FB_WIDTH / 2 - 28)
+%define DEATHSCREEN_SCORES_LEFT_POS (80 * FB_WIDTH + FB_WIDTH / 2 - 64)
+%define DEATHSCREEN_POINTS_RIGHT_POS (80 * FB_WIDTH + FB_WIDTH / 2 + 8)
 %define DEATHSCREEN_INSTR_POS (164 * FB_WIDTH + FB_WIDTH / 2 - 60)
 %define DEATHSCREEN_INSTR_ROW_OFFSET (12 * FB_WIDTH)
 %define DEATHSCREEN_INSTR_SHADOW_OFFSET (FB_WIDTH - 1)
@@ -282,7 +288,14 @@ fn render_deathscreen
 	push dword deathscreen_str_gameover
 	call draw_str
 
-	push dword DEATHSCREEN_SCORES_POS
+	mov eax, DEATHSCREEN_SCORES_MIDDLE_POS
+	cmp byte [num_snakes], 1
+	je .skip_points
+	push dword DEATHSCREEN_POINTS_RIGHT_POS
+	call render_points
+	mov eax, DEATHSCREEN_SCORES_LEFT_POS
+	.skip_points:
+	push dword eax
 	call render_scores
 
 	pushb [ebp+.keybind_shadow_color]
@@ -313,6 +326,124 @@ fn render_deathscreen
 	call draw_str
 
 	call flush_screen_buf
+endfn
+
+%define SCORES_ROW_OFFSET (15 * FB_WIDTH)
+score_row_headings:
+db "P1:", 0
+db "P2:", 0
+db "P3:", 0
+score_row_heading_len: equ 4
+scores_heading: db "Scores:", 0
+fn render_scores
+.pos: arg 4
+
+	mov edi, [ebp+.pos]
+
+	pushb text_color
+	push dword 1 ; scaling factor
+	push edi
+	push dword scores_heading
+	call draw_str
+	add edi, SCORES_ROW_OFFSET
+
+	mov esi, snakes
+	xor ecx, ecx
+	.snakes_loop:
+		pushb text_color
+		push dword 1 ; scaling factor
+		push edi
+		lea eax, [score_row_headings + ecx * score_row_heading_len]
+		push eax
+		call draw_str
+
+		push dword score_num_buf
+		push word [esi+snake_t.score]
+		call num_to_str
+
+		pushb snake_score_colors
+		add [esp], cl
+		push dword 1 ; scaling factor
+		push edi
+		add dword [esp], score_row_heading_len * 8 - 4
+		push dword score_num_buf
+		call draw_str
+
+		add edi, SCORES_ROW_OFFSET
+		add esi, snake_t_size
+		inc cl
+		cmp cl, [num_snakes]
+	jb .snakes_loop
+endfn
+%define POINTS_ROW_OFFSET SCORES_ROW_OFFSET
+points_row_headings: equ score_row_headings
+points_row_heading_len: equ score_row_heading_len
+points_heading: db "Points:", 0
+snake_points_colors: equ snake_score_colors
+fn render_points
+.pos: arg 4
+
+	mov edi, [ebp+.pos]
+
+	pushb text_color
+	push dword 1 ; scaling factor
+	push edi
+	push dword points_heading
+	call draw_str
+	add edi, POINTS_ROW_OFFSET
+
+	xor ecx, ecx
+	.snakes_loop:
+		pushb text_color
+		push dword 1 ; scaling factor
+		push edi
+		lea eax, [points_row_headings + ecx * points_row_heading_len]
+		push eax
+		call draw_str
+
+		push dword points_num_buf
+		push word [points + 4 * ecx]
+		call halved_num_to_str
+
+		pushb snake_points_colors
+		add [esp], cl
+		push dword 1 ; scaling factor
+		push edi
+		add dword [esp], points_row_heading_len * 8 - 4
+		push dword points_num_buf
+		call draw_str
+
+		add edi, POINTS_ROW_OFFSET
+		inc cl
+		cmp cl, [num_snakes]
+	jb .snakes_loop
+endfn
+; writes the decimal representation of 'num' / 2 to '.buf'
+fn halved_num_to_str
+.num: arg 2
+.buf: arg 4
+
+	push dword [ebp+.buf]
+	push word [ebp+.num]
+	shr word [esp], 1
+	call num_to_str
+
+	test word [ebp+.num], 1
+	jz .ret
+
+	; find the null-terminator of '.buf'
+	; NOTE: Assumes 'num_to_str' outputs a non-empty string.
+	mov edi, dword [ebp+.buf]
+	.loop:
+		inc edi
+		cmp byte [edi], 0
+	jnz .loop
+
+	mov byte [edi], '.'
+	mov byte [edi+1], '5'
+	mov byte [edi+2], 0
+
+	.ret:
 endfn
 
 deathscreen_str_gameover: db "Game Over", 0
@@ -397,6 +528,7 @@ fn game_tick
 	call update_snakes
 	test eax, eax
 	jnz .active_game
+	call distribute_points
 	call setup_deathscreen
 	jmp .ret
 	.active_game:
@@ -474,6 +606,109 @@ fn game_handle_input
 	.key_k:
 	mov byte [snake3+snake_t.input_buf], 3
 	.end_switch:
+
+	.ret:
+endfn
+
+; Points are distributed based on ranking by score:
+; - 2 players: 1st gets 1 point, 2nd gets 0 points
+; - 3 players: 1st gets 2 points, 2nd gets 1 point, 3rd gets 0 points
+; Players with equal scores split the points for their ranks evenly.
+; NOTE: 'points' contains twice the actual value to allow half-points.
+fn distribute_points
+; auxiliary array of 3 dwords, where each entry consists of:
+; - first word: snake index
+; - second word: the 'snake_t.score' value of the corresponding snake
+.snake_array: local 3 * 4
+
+	cmp byte [num_snakes], 1
+	je .ret
+	cmp byte [num_snakes], 2
+	je .case_2_snakes
+	cmp byte [num_snakes], 3
+	je .case_3_snakes
+	unreachable
+
+	.case_2_snakes:
+	mov ax, [snake2+snake_t.score]
+	cmp [snake1+snake_t.score], ax
+	ja .first_snake_wins
+	jb .second_snake_wins
+	; equal score
+	inc dword [points_p1]
+	inc dword [points_p2]
+	jmp .ret
+	.first_snake_wins:
+	add dword [points_p1], 2
+	jmp .ret
+	.second_snake_wins:
+	add dword [points_p2], 2
+	jmp .ret
+
+	.case_3_snakes:
+	mov word [ebp+.snake_array], 0
+	mov ax, [snake1+snake_t.score]
+	mov [ebp+.snake_array + 2], ax
+	mov word [ebp+.snake_array + 4], 1
+	mov ax, [snake2+snake_t.score]
+	mov [ebp+.snake_array + 6], ax
+	mov word [ebp+.snake_array + 8], 2
+	mov ax, [snake3+snake_t.score]
+	mov [ebp+.snake_array + 10], ax
+
+	; sort '.snake_array' in descending order by score
+	; NOTE: As the score is stored in the most significant word, comparing the
+	;       dwords directly suffices.
+	%macro _compare_and_xchg_dword 2
+		mov eax, [%1]
+		mov ebx, [%2]
+		cmp eax, ebx
+		jae %%skip
+		mov [%1], ebx
+		mov [%2], eax
+		%%skip:
+	%endmacro
+	_compare_and_xchg_dword {ebp+.snake_array}, {ebp+.snake_array + 4}
+	_compare_and_xchg_dword {ebp+.snake_array}, {ebp+.snake_array + 8}
+	_compare_and_xchg_dword {ebp+.snake_array + 4}, {ebp+.snake_array + 8}
+
+	mov ax, [ebp+.snake_array + 6]
+	cmp [ebp+.snake_array + 2], ax
+	je .equal_1st_and_2nd
+
+	movzx eax, word [ebp+.snake_array]
+	add dword [points + 4 * eax], 4
+
+	mov ax, [ebp+.snake_array + 10]
+	cmp [ebp+.snake_array + 6], ax
+	je .equal_2nd_and_3rd
+
+	movzx eax, word [ebp+.snake_array + 4]
+	add dword [points + 4 * eax], 2
+	jmp .ret
+
+	.equal_2nd_and_3rd:
+	movzx eax, word [ebp+.snake_array + 4]
+	inc dword [points + 4 * eax]
+	movzx eax, word [ebp+.snake_array + 8]
+	inc dword [points + 4 * eax]
+	jmp .ret
+
+	.equal_1st_and_2nd:
+	mov ax, [ebp+.snake_array + 10]
+	cmp [ebp+.snake_array + 6], ax
+	je .all_equal
+
+	movzx eax, word [ebp+.snake_array]
+	add dword [points + 4 * eax], 3
+	movzx eax, word [ebp+.snake_array + 4]
+	add dword [points + 4 * eax], 3
+	jmp .ret
+
+	.all_equal:
+	inc dword [points_p1]
+	inc dword [points_p2]
+	inc dword [points_p3]
 
 	.ret:
 endfn
@@ -1200,7 +1435,7 @@ fn render_snakes
 	; sort '.snake_array' in descending order
 	; NOTE: Because the 'snake_t.dead' value is the MSB of every element, the
 	;       array is sorted from most transparent to least transparent snake.
-	%macro _compare_and_xchg 2
+	%macro _compare_and_xchg_word 2
 		mov ax, [%1]
 		mov bx, [%2]
 		cmp ax, bx
@@ -1209,9 +1444,9 @@ fn render_snakes
 		mov [%2], ax
 		%%skip:
 	%endmacro
-	_compare_and_xchg {ebp+.snake_array}, {ebp+.snake_array + 2}
-	_compare_and_xchg {ebp+.snake_array}, {ebp+.snake_array + 4}
-	_compare_and_xchg {ebp+.snake_array + 2}, {ebp+.snake_array + 4}
+	_compare_and_xchg_word {ebp+.snake_array}, {ebp+.snake_array + 2}
+	_compare_and_xchg_word {ebp+.snake_array}, {ebp+.snake_array + 4}
+	_compare_and_xchg_word {ebp+.snake_array + 2}, {ebp+.snake_array + 4}
 
 	lea esi, [ebp+.snake_array]
 	movzx ecx, byte [num_snakes]
@@ -1317,54 +1552,6 @@ fn draw_snake_segment
 		mov [edi], al
 		add edi, ebx
 	loop .loop
-endfn
-
-%define SCORES_ROW_OFFSET (15 * FB_WIDTH)
-score_row_headings:
-db "P1:", 0
-db "P2:", 0
-db "P3:", 0
-score_row_heading_len: equ 4
-scores_heading: db "Scores:", 0
-fn render_scores
-.pos: arg 4
-
-	mov edi, [ebp+.pos]
-
-	pushb text_color
-	push dword 1 ; scaling factor
-	push edi
-	push dword scores_heading
-	call draw_str
-	add edi, SCORES_ROW_OFFSET
-
-	mov esi, snakes
-	xor ecx, ecx
-	.snakes_loop:
-		pushb text_color
-		push dword 1 ; scaling factor
-		push edi
-		lea eax, [score_row_headings + ecx * score_row_heading_len]
-		push eax
-		call draw_str
-
-		push dword score_num_buf
-		push word [esi+snake_t.score]
-		call num_to_str
-
-		pushb snake_score_colors
-		add [esp], cl
-		push dword 1 ; scaling factor
-		push edi
-		add dword [esp], score_row_heading_len * 8 - 4
-		push dword score_num_buf
-		call draw_str
-
-		add edi, SCORES_ROW_OFFSET
-		add esi, snake_t_size
-		inc cl
-		cmp cl, [num_snakes]
-	jb .snakes_loop
 endfn
 
 static_assert {ENDGAME_COUNTDOWN_MAX_LENGTH * 2 < 100}
@@ -1580,6 +1767,14 @@ snake3: resb snake_t_size
 ; in pixels / second
 snake_speed: resb 2
 
+; stores the points of each player
+; NOTE: The points are stored as double the actual value to allow for half
+;       points.
+points:
+points_p1: resb 4
+points_p2: resb 4
+points_p3: resb 4
+
 num_targets: resb 1
 ; contains the position of every target,
 ; see [General Note - Representation of Positions]
@@ -1587,6 +1782,7 @@ targets:
 resb 4 * MAX_TARGETS
 
 score_num_buf: resb 6
+points_num_buf: resb 8
 
 ; countdown in seconds until the game ends,
 ; negative numbers indicate that the countdown has not yet started
