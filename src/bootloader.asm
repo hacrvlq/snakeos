@@ -93,6 +93,7 @@ _format_ax:
 _print_str:
 	mov ah, 0x0E
 	.loop:
+		cld
     lodsb
 		cmp al, 0
 		je .ret

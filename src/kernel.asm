@@ -333,6 +333,7 @@ fn clear_screen_buf
 	xor al, al
 	mov edi, screen_buf
 	mov ecx, FB_SIZE
+	cld
 	rep stosb
 endfn
 fn flush_screen_buf
