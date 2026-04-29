@@ -337,10 +337,25 @@ deathscreen_str_enter: db "Enter", 0
 ; length increase of the snake upon reaching a target
 %define SNAKE_TARGET_GROWTH (2 * SNAKE_SIZE)
 %define INIT_SNAKE_LEN (5 * SNAKE_SIZE)
+; After a snake dies in multiplayer mode, a countdown to end the game is
+; started. The duration depends on the total length of all alive snakes:
+; - Total length <= 'ENDGAME_COUNTDOWN_MIN_SNAKE_LEN' results in
+;   'ENDGAME_COUNTDOWN_MIN_LENGTH' seconds
+; - Total length >= 'ENDGAME_COUNTDOWN_MAX_SNAKE_LEN' results in
+;   'ENDGAME_COUNTDOWN_MAX_LENGTH' seconds
+; - Between those bounds, the duration is linearly interpolated
+; The resulting duration is then multiplied by the number of alive snakes.
+%define ENDGAME_COUNTDOWN_MIN_LENGTH 20
+%define ENDGAME_COUNTDOWN_MIN_SNAKE_LEN (20 * SNAKE_TARGET_GROWTH + INIT_SNAKE_LEN)
+%define ENDGAME_COUNTDOWN_MAX_LENGTH 45
+%define ENDGAME_COUNTDOWN_MAX_SNAKE_LEN (50 * SNAKE_TARGET_GROWTH + INIT_SNAKE_LEN)
 
 %define SNAKE_FADEOUT_TICKS 15
 %define SNAKE_HEAD_LEN (SNAKE_SIZE + 1)
+
 %define GAMESCREEN_SCORES_POS (WORLD_SIZE + 32 + 4 * FB_WIDTH)
+%define GAMESCREEN_COUNTDOWN_POS (WORLD_SIZE + 28 + 84 * FB_WIDTH)
+%define GAMESCREEN_COUNTDOWN_SIZE 4
 
 ; ========================== [General Note - Representation of Positions] ==========================
 ; Positions are represented as a 32-bit number using the following bijection:
@@ -363,6 +378,8 @@ fn setup_gamescreen
 	pushb MAX_TARGETS
 	call setup_targets
 
+	mov word [endgame_countdown], -1
+
 	; setting up the PIT with a divisor results in the following frequency:
 	; freq = 1193182 / divisor
 	; thus, the divisor must be:
@@ -381,6 +398,7 @@ fn game_tick
 	jmp .ret
 	.active_game:
 	call handle_collisions
+	call handle_endgame_countdown
 
 	call render_game
 
@@ -904,6 +922,7 @@ endfn
 
 fn handle_snake_collisions
 .snake: arg 4
+.segment_dir_offset: local 4
 
 	mov esi, [ebp+.snake]
 
@@ -912,26 +931,27 @@ fn handle_snake_collisions
 	dec byte [esp]
 	and byte [esp], 0b11
 	call get_dir_offset
-	mov ebx, eax
+	mov [ebp+.segment_dir_offset], eax
 
 	; loop over every position of the first segment to check for collisions
 	mov ecx, SNAKE_SIZE
 	.loop:
-		mov al, [object_buf + edx]
-		test al, al
+		mov bl, [object_buf + edx]
+		test bl, bl
 		jz .continue
 
-		cmp al, BLOCKER_ID
+		cmp byte [esi+snake_t.dead], 0
 		jne .skip_blocker_coll_handler
-		mov byte [esi+snake_t.dead], 1
-		; retract the colliding segment
-		memcpy [esi+snake_t.segments], [esi+snake_t.segments+snake_segment_t_size], snake_segment_t_size
+		cmp bl, BLOCKER_ID
+		jne .skip_blocker_coll_handler
+		push esi
+		call handle_snake_death
 		.skip_blocker_coll_handler:
 
-		cmp al, byte [num_targets]
+		cmp bl, byte [num_targets]
 		ja .skip_target_coll_handler
 		; reposition the colliding target
-		pushb al
+		pushb bl
 		call setup_target
 		call fill_object_buf
 
@@ -942,7 +962,7 @@ fn handle_snake_collisions
 		.skip_target_coll_handler:
 
 		.continue:
-		add edx, ebx
+		add edx, [ebp+.segment_dir_offset]
 	loop .loop
 endfn
 
@@ -981,6 +1001,98 @@ fn check_target_pos
 	.ret:
 endfn
 
+fn handle_snake_death
+.snake: arg 4
+
+	mov esi, [ebp+.snake]
+	mov byte [esi+snake_t.dead], 1
+	; retract the colliding segment
+	memcpy [esi+snake_t.segments], [esi+snake_t.segments+snake_segment_t_size], snake_segment_t_size
+
+	cmp byte [num_snakes], 1
+	jbe .ret
+
+	; if the current countdown is longer than the newly calculated one, shorten it
+	; NOTE: As 'endgame_countdown' is -1 when the countdown has not yet started,
+	;       the countdown will always be started in this case.
+	call calculate_endgame_countdown_length
+	cmp ax, [endgame_countdown]
+	jae .ret
+	mov [endgame_countdown], ax
+	mov word [endgame_countdown_substep], 0
+
+	.ret:
+endfn
+; see the comment above 'ENDGAME_COUNTDOWN_MIN_LENGTH' for an explanation
+fn calculate_endgame_countdown_length
+.num_alive_snakes: local 4
+
+	xor eax, eax
+	mov dword [ebp+.num_alive_snakes], 0
+	mov esi, snakes
+	movzx ecx, byte [num_snakes]
+	.loop:
+		cmp byte [esi+snake_t.dead], 0
+		jne .continue
+		add eax, [esi+snake_t.len]
+		inc dword [ebp+.num_alive_snakes]
+		.continue:
+		add esi, snake_t_size
+	loop .loop
+
+	cmp eax, ENDGAME_COUNTDOWN_MIN_SNAKE_LEN
+	ja .skip_lower_clamping
+	mov eax, ENDGAME_COUNTDOWN_MIN_LENGTH
+	jmp .ret
+	.skip_lower_clamping:
+
+	cmp eax, ENDGAME_COUNTDOWN_MAX_SNAKE_LEN
+	jb .skip_upper_clamping
+	mov eax, ENDGAME_COUNTDOWN_MAX_LENGTH
+	jmp .ret
+	.skip_upper_clamping:
+
+	sub eax, ENDGAME_COUNTDOWN_MIN_SNAKE_LEN
+	mov ebx, ENDGAME_COUNTDOWN_MAX_LENGTH - ENDGAME_COUNTDOWN_MIN_LENGTH
+	mul ebx
+	mov ebx, ENDGAME_COUNTDOWN_MAX_SNAKE_LEN - ENDGAME_COUNTDOWN_MIN_SNAKE_LEN
+	div ebx
+	add eax, ENDGAME_COUNTDOWN_MIN_LENGTH
+
+	.ret:
+	mul dword [ebp+.num_alive_snakes]
+endfn
+
+fn handle_endgame_countdown
+	cmp word [endgame_countdown], 0
+	jle .ret
+
+	; As the game runs at a frequency of 'SNAKE_SPEED' Hz, ticks must be
+	; accumulated in order to update the countdown at 1 Hz.
+	inc word [endgame_countdown_substep]
+	cmp word [endgame_countdown_substep], SNAKE_SPEED
+	jb .ret
+
+	dec word [endgame_countdown]
+	mov word [endgame_countdown_substep], 0
+
+	cmp word [endgame_countdown], 0
+	jne .ret
+
+	; kill the remaining snakes
+	mov esi, snakes
+	movzx ecx, byte [num_snakes]
+	.loop:
+		cmp byte [esi+snake_t.dead], 0
+		jne .continue
+		mov byte [esi+snake_t.dead], 1
+		.continue:
+		add esi, snake_t_size
+	loop .loop
+
+	.ret:
+endfn
+
 ; ==================================================================================================
 ; Rendering
 ; ==================================================================================================
@@ -994,6 +1106,11 @@ fn render_game
 
 	push dword GAMESCREEN_SCORES_POS
 	call render_scores
+
+	cmp word [endgame_countdown], -1
+	je .skip_countdown
+	call render_countdown
+	.skip_countdown:
 
 	call render_snakes
 	call render_targets
@@ -1200,6 +1317,23 @@ fn render_scores
 	jb .snakes_loop
 endfn
 
+static_assert {ENDGAME_COUNTDOWN_MAX_LENGTH * 2 < 100}
+fn render_countdown
+	push dword endgame_countdown_num_buf
+	push word [endgame_countdown]
+	call num_to_str
+
+	pushb text_color
+	push dword GAMESCREEN_COUNTDOWN_SIZE
+	push dword GAMESCREEN_COUNTDOWN_POS
+	cmp word [endgame_countdown], 10
+	jae .skip_shift
+	add dword [esp], GAMESCREEN_COUNTDOWN_SIZE * 8
+	.skip_shift:
+	push dword endgame_countdown_num_buf
+	call draw_str
+endfn
+
 fn render_targets
 	mov esi, targets
 	movzx ecx, byte [num_targets]
@@ -1401,3 +1535,9 @@ targets:
 resb 4 * MAX_TARGETS
 
 score_num_buf: resb 6
+
+; countdown in seconds until the game ends,
+; negative numbers indicate that the countdown has not yet started
+endgame_countdown: resb 2
+endgame_countdown_substep: resb 2
+endgame_countdown_num_buf: resb 6
