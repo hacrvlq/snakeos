@@ -5,54 +5,54 @@
 section code
 ; entry point (called from `kernel.asm`)
 fn init
-	call setup_palette
-	call setup_titlescreen
+  call setup_palette
+  call setup_titlescreen
 endfn
 
 ; called every PIT interrupt from `kernel.asm`
 fn tick
-	cmp byte [active_screen], TITLESCREEN_ID
-	je .titlescreen
-	cmp byte [active_screen], GAMESCREEN_ID
-	je .gamescreen
-	cmp byte [active_screen], DEATHSCREEN_ID
-	je .deathscreen
-	unreachable
+  cmp byte [active_screen], TITLESCREEN_ID
+  je .titlescreen
+  cmp byte [active_screen], GAMESCREEN_ID
+  je .gamescreen
+  cmp byte [active_screen], DEATHSCREEN_ID
+  je .deathscreen
+  unreachable
 
-	.titlescreen:
-	call titlescreen_tick
-	jmp .end_switch
-	.gamescreen:
-	call game_tick
-	jmp .end_switch
-	.deathscreen:
-	call deathscreen_tick
-	.end_switch:
+  .titlescreen:
+  call titlescreen_tick
+  jmp .end_switch
+  .gamescreen:
+  call game_tick
+  jmp .end_switch
+  .deathscreen:
+  call deathscreen_tick
+  .end_switch:
 endfn
 
 ; called every keyboard event from `kernel.asm`
 fn keyboard_handler
 .keycode: arg 1
 
-	pushb [ebp+.keycode]
+  pushb [ebp+.keycode]
 
-	cmp byte [active_screen], TITLESCREEN_ID
-	je .titlescreen
-	cmp byte [active_screen], GAMESCREEN_ID
-	je .gamescreen
-	cmp byte [active_screen], DEATHSCREEN_ID
-	je .deathscreen
-	unreachable
+  cmp byte [active_screen], TITLESCREEN_ID
+  je .titlescreen
+  cmp byte [active_screen], GAMESCREEN_ID
+  je .gamescreen
+  cmp byte [active_screen], DEATHSCREEN_ID
+  je .deathscreen
+  unreachable
 
-	.titlescreen:
-	call titlescreen_handle_input
-	jmp .end_switch
-	.gamescreen:
-	call game_handle_input
-	jmp .end_switch
-	.deathscreen:
-	call deathscreen_handle_input
-	.end_switch:
+  .titlescreen:
+  call titlescreen_handle_input
+  jmp .end_switch
+  .gamescreen:
+  call game_handle_input
+  jmp .end_switch
+  .deathscreen:
+  call deathscreen_handle_input
+  .end_switch:
 endfn
 
 ; ==================================================================================================
@@ -60,60 +60,60 @@ endfn
 ; ==================================================================================================
 
 fn setup_titlescreen
-	mov byte [active_screen], TITLESCREEN_ID
+  mov byte [active_screen], TITLESCREEN_ID
 
-	mov dword [points_p1], 0
-	mov dword [points_p2], 0
-	mov dword [points_p3], 0
+  mov dword [points_p1], 0
+  mov dword [points_p2], 0
+  mov dword [points_p3], 0
 
-	; setup the PIT with the lowest possible frequency
-	push word 65535
-	call setup_pit
+  ; setup the PIT with the lowest possible frequency
+  push word 65535
+  call setup_pit
 endfn
 
 fn titlescreen_handle_input
 .keycode: arg 1
 
-	cmp byte [ebp+.keycode], 0x02
-	je .key_1
-	cmp byte [ebp+.keycode], 0x03
-	je .key_2
-	cmp byte [ebp+.keycode], 0x04
-	je .key_3
-	jmp .ret
+  cmp byte [ebp+.keycode], 0x02
+  je .key_1
+  cmp byte [ebp+.keycode], 0x03
+  je .key_2
+  cmp byte [ebp+.keycode], 0x04
+  je .key_3
+  jmp .ret
 
-	.key_1:
-	pushb 1
-	jmp .end_switch
-	.key_2:
-	pushb 2
-	jmp .end_switch
-	.key_3:
-	pushb 3
-	.end_switch:
-	call setup_gamescreen
+  .key_1:
+  pushb 1
+  jmp .end_switch
+  .key_2:
+  pushb 2
+  jmp .end_switch
+  .key_3:
+  pushb 3
+  .end_switch:
+  call setup_gamescreen
 
-	.ret:
+  .ret:
 endfn
 
 %define KEYBIND_SHADOW_PHASE_OFFSET 43
 
 ; toggle text shadow color
 fn titlescreen_tick
-	; To further reduce the frequency of color changes, a constant value is added
-	; to the byte 'keybind_shadow_phase' every tick. Because
-	; 'keybind_shadow_phase' wraps around at 127 to -128, roughly half the time
-	; 'keybind_shadow_phase' < 0 and the other half 'keybind_shadow_phase' >= 0,
-	; but the frequency is lower.
+  ; To further reduce the frequency of color changes, a constant value is added
+  ; to the byte 'keybind_shadow_phase' every tick. Because
+  ; 'keybind_shadow_phase' wraps around at 127 to -128, roughly half the time
+  ; 'keybind_shadow_phase' < 0 and the other half 'keybind_shadow_phase' >= 0,
+  ; but the frequency is lower.
 
-	add byte [keybind_shadow_phase], KEYBIND_SHADOW_PHASE_OFFSET
+  add byte [keybind_shadow_phase], KEYBIND_SHADOW_PHASE_OFFSET
 
-	pushb text_shadow_color
-	cmp byte [keybind_shadow_phase], 0
-	jl .render
-	pushb text_shadow_color2
-	.render:
-	call render_titlescreen
+  pushb text_shadow_color
+  cmp byte [keybind_shadow_phase], 0
+  jl .render
+  pushb text_shadow_color2
+  .render:
+  call render_titlescreen
 endfn
 
 %define TITLESCREEN_HEADING_SIZE 5
@@ -133,80 +133,80 @@ endfn
 fn render_titlescreen
 .keybind_shadow_color: arg 1
 
-	call clear_screen_buf
+  call clear_screen_buf
 
-	pushb text_shadow_color
-	push dword TITLESCREEN_HEADING_SIZE
-	push dword TITLESCREEN_HEADING_POS + TITLESCREEN_HEADING_SHADOW_OFFSET
-	push dword titlescreen_title
-	call draw_str
-	pushb text_color
-	push dword TITLESCREEN_HEADING_SIZE
-	push dword TITLESCREEN_HEADING_POS
-	push dword titlescreen_title
-	call draw_str
+  pushb text_shadow_color
+  push dword TITLESCREEN_HEADING_SIZE
+  push dword TITLESCREEN_HEADING_POS + TITLESCREEN_HEADING_SHADOW_OFFSET
+  push dword titlescreen_title
+  call draw_str
+  pushb text_color
+  push dword TITLESCREEN_HEADING_SIZE
+  push dword TITLESCREEN_HEADING_POS
+  push dword titlescreen_title
+  call draw_str
 
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_POS - TITLESCREEN_INSTR_HEADING_OFFSET
-	push dword titlescreen_str_press
-	call draw_str
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_POS - TITLESCREEN_INSTR_HEADING_OFFSET
+  push dword titlescreen_str_press
+  call draw_str
 
-	pushb [ebp+.keybind_shadow_color]
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_COL1 - 4 + TITLESCREEN_INSTR_SHADOW_OFFSET
-	pushb '1'
-	call draw_char
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_COL1 - 4
-	pushb '1'
-	call draw_char
+  pushb [ebp+.keybind_shadow_color]
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_COL1 - 4 + TITLESCREEN_INSTR_SHADOW_OFFSET
+  pushb '1'
+  call draw_char
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_COL1 - 4
+  pushb '1'
+  call draw_char
 
-	pushb [ebp+.keybind_shadow_color]
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_COL2 - 4 + TITLESCREEN_INSTR_SHADOW_OFFSET
-	pushb '2'
-	call draw_char
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_COL2 - 4
-	pushb '2'
-	call draw_char
+  pushb [ebp+.keybind_shadow_color]
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_COL2 - 4 + TITLESCREEN_INSTR_SHADOW_OFFSET
+  pushb '2'
+  call draw_char
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_COL2 - 4
+  pushb '2'
+  call draw_char
 
-	pushb [ebp+.keybind_shadow_color]
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_COL3 - 4 + TITLESCREEN_INSTR_SHADOW_OFFSET
-	pushb '3'
-	call draw_char
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_COL3 - 4
-	pushb '3'
-	call draw_char
+  pushb [ebp+.keybind_shadow_color]
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_COL3 - 4 + TITLESCREEN_INSTR_SHADOW_OFFSET
+  pushb '3'
+  call draw_char
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_COL3 - 4
+  pushb '3'
+  call draw_char
 
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_POS - TITLESCREEN_INSTR_HEADING_OFFSET + TITLESCREEN_INSTR_ROW_OFFSET
-	push dword titlescreen_str_constrols
-	call draw_str
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_COL1 + TITLESCREEN_INSTR_ROW_OFFSET - 16
-	push dword titlescreen_controls1
-	call draw_str
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_COL2 + TITLESCREEN_INSTR_ROW_OFFSET - 24
-	push dword titlescreen_controls2
-	call draw_str
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword TITLESCREEN_INSTR_COL3 + TITLESCREEN_INSTR_ROW_OFFSET - 16
-	push dword titlescreen_controls3
-	call draw_str
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_POS - TITLESCREEN_INSTR_HEADING_OFFSET + TITLESCREEN_INSTR_ROW_OFFSET
+  push dword titlescreen_str_constrols
+  call draw_str
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_COL1 + TITLESCREEN_INSTR_ROW_OFFSET - 16
+  push dword titlescreen_controls1
+  call draw_str
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_COL2 + TITLESCREEN_INSTR_ROW_OFFSET - 24
+  push dword titlescreen_controls2
+  call draw_str
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword TITLESCREEN_INSTR_COL3 + TITLESCREEN_INSTR_ROW_OFFSET - 16
+  push dword titlescreen_controls3
+  call draw_str
 
-	call flush_screen_buf
+  call flush_screen_buf
 endfn
 
 titlescreen_title: db "SnakeOS", 0
@@ -221,44 +221,44 @@ titlescreen_controls3: db "IJKL", 0
 ; ==================================================================================================
 
 fn setup_deathscreen
-	mov byte [active_screen], DEATHSCREEN_ID
+  mov byte [active_screen], DEATHSCREEN_ID
 
-	; setup the PIT with the lowest possible frequency
-	push word 65535
-	call setup_pit
+  ; setup the PIT with the lowest possible frequency
+  push word 65535
+  call setup_pit
 endfn
 
 fn deathscreen_handle_input
 .keycode: arg 1
 
-	cmp byte [ebp+.keycode], 0x13
-	je .key_r
-	cmp byte [ebp+.keycode], 0x1C
-	je .key_enter
-	jmp .ret
+  cmp byte [ebp+.keycode], 0x13
+  je .key_r
+  cmp byte [ebp+.keycode], 0x1C
+  je .key_enter
+  jmp .ret
 
-	.key_r:
-	pushb [num_snakes]
-	call setup_gamescreen
-	jmp .end_switch
-	.key_enter:
-	call setup_titlescreen
-	.end_switch:
+  .key_r:
+  pushb [num_snakes]
+  call setup_gamescreen
+  jmp .end_switch
+  .key_enter:
+  call setup_titlescreen
+  .end_switch:
 
-	.ret:
+  .ret:
 endfn
 
 fn deathscreen_tick
-	; see 'titlescreen_tick' for an explanation
+  ; see 'titlescreen_tick' for an explanation
 
-	add byte [keybind_shadow_phase], KEYBIND_SHADOW_PHASE_OFFSET
+  add byte [keybind_shadow_phase], KEYBIND_SHADOW_PHASE_OFFSET
 
-	pushb text_shadow_color
-	cmp byte [keybind_shadow_phase], 0
-	jl .render
-	pushb text_shadow_color2
-	.render:
-	call render_deathscreen
+  pushb text_shadow_color
+  cmp byte [keybind_shadow_phase], 0
+  jl .render
+  pushb text_shadow_color2
+  .render:
+  call render_deathscreen
 endfn
 
 %define DEATHSCREEN_HEADING_SIZE 4
@@ -275,57 +275,57 @@ endfn
 fn render_deathscreen
 .keybind_shadow_color: arg 1
 
-	call clear_screen_buf
+  call clear_screen_buf
 
-	pushb text_shadow_color
-	push dword DEATHSCREEN_HEADING_SIZE
-	push dword DEATHSCREEN_HEADING_POS + DEATHSCREEN_HEADING_SHADOW_OFFSET
-	push dword deathscreen_str_gameover
-	call draw_str
-	pushb text_color
-	push dword DEATHSCREEN_HEADING_SIZE
-	push dword DEATHSCREEN_HEADING_POS
-	push dword deathscreen_str_gameover
-	call draw_str
+  pushb text_shadow_color
+  push dword DEATHSCREEN_HEADING_SIZE
+  push dword DEATHSCREEN_HEADING_POS + DEATHSCREEN_HEADING_SHADOW_OFFSET
+  push dword deathscreen_str_gameover
+  call draw_str
+  pushb text_color
+  push dword DEATHSCREEN_HEADING_SIZE
+  push dword DEATHSCREEN_HEADING_POS
+  push dword deathscreen_str_gameover
+  call draw_str
 
-	mov eax, DEATHSCREEN_SCORES_MIDDLE_POS
-	cmp byte [num_snakes], 1
-	je .skip_points
-	push dword DEATHSCREEN_POINTS_RIGHT_POS
-	call render_points
-	mov eax, DEATHSCREEN_SCORES_LEFT_POS
-	.skip_points:
-	push dword eax
-	call render_scores
+  mov eax, DEATHSCREEN_SCORES_MIDDLE_POS
+  cmp byte [num_snakes], 1
+  je .skip_points
+  push dword DEATHSCREEN_POINTS_RIGHT_POS
+  call render_points
+  mov eax, DEATHSCREEN_SCORES_LEFT_POS
+  .skip_points:
+  push dword eax
+  call render_scores
 
-	pushb [ebp+.keybind_shadow_color]
-	push dword 1 ; scaling factor
-	push dword DEATHSCREEN_INSTR_POS + DEATHSCREEN_INSTR_SHADOW_OFFSET
-	pushb 'R'
-	call draw_char
-	pushb [ebp+.keybind_shadow_color]
-	push dword 1 ; scaling factor
-	push dword DEATHSCREEN_INSTR_POS + DEATHSCREEN_INSTR_ROW_OFFSET + DEATHSCREEN_INSTR_SHADOW_OFFSET
-	push dword deathscreen_str_enter
-	call draw_str
+  pushb [ebp+.keybind_shadow_color]
+  push dword 1 ; scaling factor
+  push dword DEATHSCREEN_INSTR_POS + DEATHSCREEN_INSTR_SHADOW_OFFSET
+  pushb 'R'
+  call draw_char
+  pushb [ebp+.keybind_shadow_color]
+  push dword 1 ; scaling factor
+  push dword DEATHSCREEN_INSTR_POS + DEATHSCREEN_INSTR_ROW_OFFSET + DEATHSCREEN_INSTR_SHADOW_OFFSET
+  push dword deathscreen_str_enter
+  call draw_str
 
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword DEATHSCREEN_INSTR_POS + 6 * FB_WIDTH - 48
-	push dword deathscreen_str_press
-	call draw_str
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword DEATHSCREEN_INSTR_POS
-	push dword deathscreen_instr1
-	call draw_str
-	pushb text_color
-	push dword 1 ; scaling factor
-	push dword DEATHSCREEN_INSTR_POS + DEATHSCREEN_INSTR_ROW_OFFSET
-	push dword deathscreen_instr2
-	call draw_str
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword DEATHSCREEN_INSTR_POS + 6 * FB_WIDTH - 48
+  push dword deathscreen_str_press
+  call draw_str
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword DEATHSCREEN_INSTR_POS
+  push dword deathscreen_instr1
+  call draw_str
+  pushb text_color
+  push dword 1 ; scaling factor
+  push dword DEATHSCREEN_INSTR_POS + DEATHSCREEN_INSTR_ROW_OFFSET
+  push dword deathscreen_instr2
+  call draw_str
 
-	call flush_screen_buf
+  call flush_screen_buf
 endfn
 
 %define SCORES_ROW_OFFSET (15 * FB_WIDTH)
@@ -338,42 +338,42 @@ scores_heading: db "Scores:", 0
 fn render_scores
 .pos: arg 4
 
-	mov edi, [ebp+.pos]
+  mov edi, [ebp+.pos]
 
-	pushb text_color
-	push dword 1 ; scaling factor
-	push edi
-	push dword scores_heading
-	call draw_str
-	add edi, SCORES_ROW_OFFSET
+  pushb text_color
+  push dword 1 ; scaling factor
+  push edi
+  push dword scores_heading
+  call draw_str
+  add edi, SCORES_ROW_OFFSET
 
-	mov esi, snakes
-	xor ecx, ecx
-	.snakes_loop:
-		pushb text_color
-		push dword 1 ; scaling factor
-		push edi
-		lea eax, [score_row_headings + ecx * score_row_heading_len]
-		push eax
-		call draw_str
+  mov esi, snakes
+  xor ecx, ecx
+  .snakes_loop:
+    pushb text_color
+    push dword 1 ; scaling factor
+    push edi
+    lea eax, [score_row_headings + ecx * score_row_heading_len]
+    push eax
+    call draw_str
 
-		push dword score_num_buf
-		push word [esi+snake_t.score]
-		call num_to_str
+    push dword score_num_buf
+    push word [esi+snake_t.score]
+    call num_to_str
 
-		pushb snake_score_colors
-		add [esp], cl
-		push dword 1 ; scaling factor
-		push edi
-		add dword [esp], score_row_heading_len * 8 - 4
-		push dword score_num_buf
-		call draw_str
+    pushb snake_score_colors
+    add [esp], cl
+    push dword 1 ; scaling factor
+    push edi
+    add dword [esp], score_row_heading_len * 8 - 4
+    push dword score_num_buf
+    call draw_str
 
-		add edi, SCORES_ROW_OFFSET
-		add esi, snake_t_size
-		inc cl
-		cmp cl, [num_snakes]
-	jb .snakes_loop
+    add edi, SCORES_ROW_OFFSET
+    add esi, snake_t_size
+    inc cl
+    cmp cl, [num_snakes]
+  jb .snakes_loop
 endfn
 %define POINTS_ROW_OFFSET SCORES_ROW_OFFSET
 points_row_headings: equ score_row_headings
@@ -383,67 +383,67 @@ snake_points_colors: equ snake_score_colors
 fn render_points
 .pos: arg 4
 
-	mov edi, [ebp+.pos]
+  mov edi, [ebp+.pos]
 
-	pushb text_color
-	push dword 1 ; scaling factor
-	push edi
-	push dword points_heading
-	call draw_str
-	add edi, POINTS_ROW_OFFSET
+  pushb text_color
+  push dword 1 ; scaling factor
+  push edi
+  push dword points_heading
+  call draw_str
+  add edi, POINTS_ROW_OFFSET
 
-	xor ecx, ecx
-	.snakes_loop:
-		pushb text_color
-		push dword 1 ; scaling factor
-		push edi
-		lea eax, [points_row_headings + ecx * points_row_heading_len]
-		push eax
-		call draw_str
+  xor ecx, ecx
+  .snakes_loop:
+    pushb text_color
+    push dword 1 ; scaling factor
+    push edi
+    lea eax, [points_row_headings + ecx * points_row_heading_len]
+    push eax
+    call draw_str
 
-		push dword points_num_buf
-		push word [points + 4 * ecx]
-		call halved_num_to_str
+    push dword points_num_buf
+    push word [points + 4 * ecx]
+    call halved_num_to_str
 
-		pushb snake_points_colors
-		add [esp], cl
-		push dword 1 ; scaling factor
-		push edi
-		add dword [esp], points_row_heading_len * 8 - 4
-		push dword points_num_buf
-		call draw_str
+    pushb snake_points_colors
+    add [esp], cl
+    push dword 1 ; scaling factor
+    push edi
+    add dword [esp], points_row_heading_len * 8 - 4
+    push dword points_num_buf
+    call draw_str
 
-		add edi, POINTS_ROW_OFFSET
-		inc cl
-		cmp cl, [num_snakes]
-	jb .snakes_loop
+    add edi, POINTS_ROW_OFFSET
+    inc cl
+    cmp cl, [num_snakes]
+  jb .snakes_loop
 endfn
 ; writes the decimal representation of 'num' / 2 to '.buf'
 fn halved_num_to_str
 .num: arg 2
 .buf: arg 4
 
-	push dword [ebp+.buf]
-	push word [ebp+.num]
-	shr word [esp], 1
-	call num_to_str
+  push dword [ebp+.buf]
+  push word [ebp+.num]
+  shr word [esp], 1
+  call num_to_str
 
-	test word [ebp+.num], 1
-	jz .ret
+  test word [ebp+.num], 1
+  jz .ret
 
-	; find the null-terminator of '.buf'
-	; NOTE: Assumes 'num_to_str' outputs a non-empty string.
-	mov edi, dword [ebp+.buf]
-	.loop:
-		inc edi
-		cmp byte [edi], 0
-	jnz .loop
+  ; find the null-terminator of '.buf'
+  ; NOTE: Assumes 'num_to_str' outputs a non-empty string.
+  mov edi, dword [ebp+.buf]
+  .loop:
+    inc edi
+    cmp byte [edi], 0
+  jnz .loop
 
-	mov byte [edi], '.'
-	mov byte [edi+1], '5'
-	mov byte [edi+2], 0
+  mov byte [edi], '.'
+  mov byte [edi+1], '5'
+  mov byte [edi+2], 0
 
-	.ret:
+  .ret:
 endfn
 
 deathscreen_str_gameover: db "Game Over", 0
@@ -503,111 +503,111 @@ deathscreen_str_enter: db "Enter", 0
 fn setup_gamescreen
 .num_snakes: arg 1
 
-	mov byte [active_screen], GAMESCREEN_ID
+  mov byte [active_screen], GAMESCREEN_ID
 
-	pushb [ebp+.num_snakes]
-	call setup_snakes
+  pushb [ebp+.num_snakes]
+  call setup_snakes
 
-	pushb MAX_TARGETS
-	call setup_targets
+  pushb MAX_TARGETS
+  call setup_targets
 
-	mov word [endgame_countdown], -1
+  mov word [endgame_countdown], -1
 
-	; setting up the PIT with a divisor results in the following frequency:
-	; freq = 1193182 / divisor
-	; thus, the divisor must be:
-	; divisor = 1193182 / freq
-	mov dx, (1193182 & 0xFFFF0000) >> 16
-	mov ax, 1193182 & 0xFFFF
-	div word [snake_speed]
-	push ax
-	call setup_pit
+  ; setting up the PIT with a divisor results in the following frequency:
+  ; freq = 1193182 / divisor
+  ; thus, the divisor must be:
+  ; divisor = 1193182 / freq
+  mov dx, (1193182 & 0xFFFF0000) >> 16
+  mov ax, 1193182 & 0xFFFF
+  div word [snake_speed]
+  push ax
+  call setup_pit
 endfn
 
 fn game_tick
-	call update_snakes
-	test eax, eax
-	jnz .active_game
-	call distribute_points
-	call setup_deathscreen
-	jmp .ret
-	.active_game:
-	call handle_collisions
-	call handle_endgame_countdown
+  call update_snakes
+  test eax, eax
+  jnz .active_game
+  call distribute_points
+  call setup_deathscreen
+  jmp .ret
+  .active_game:
+  call handle_collisions
+  call handle_endgame_countdown
 
-	call render_game
+  call render_game
 
-	.ret:
+  .ret:
 endfn
 
 fn game_handle_input
 .keycode: arg 1
 
-	mov al, [ebp+.keycode]
-	cmp al, 0x20
-	je .key_d
-	cmp al, 0x11
-	je .key_w
-	cmp al, 0x1e
-	je .key_a
-	cmp al, 0x1f
-	je .key_s
-	cmp al, 0x26
-	je .key_l
-	cmp al, 0x17
-	je .key_i
-	cmp al, 0x24
-	je .key_j
-	cmp al, 0x25
-	je .key_k
-	cmp al, 0x4d
-	je .key_right
-	cmp al, 0x48
-	je .key_up
-	cmp al, 0x4b
-	je .key_left
-	cmp al, 0x50
-	je .key_down
-	jmp .ret
+  mov al, [ebp+.keycode]
+  cmp al, 0x20
+  je .key_d
+  cmp al, 0x11
+  je .key_w
+  cmp al, 0x1e
+  je .key_a
+  cmp al, 0x1f
+  je .key_s
+  cmp al, 0x26
+  je .key_l
+  cmp al, 0x17
+  je .key_i
+  cmp al, 0x24
+  je .key_j
+  cmp al, 0x25
+  je .key_k
+  cmp al, 0x4d
+  je .key_right
+  cmp al, 0x48
+  je .key_up
+  cmp al, 0x4b
+  je .key_left
+  cmp al, 0x50
+  je .key_down
+  jmp .ret
 
-	.key_d:
-	mov byte [snake1+snake_t.input_buf], 0
-	jmp .end_switch
-	.key_w:
-	mov byte [snake1+snake_t.input_buf], 1
-	jmp .end_switch
-	.key_a:
-	mov byte [snake1+snake_t.input_buf], 2
-	jmp .end_switch
-	.key_s:
-	mov byte [snake1+snake_t.input_buf], 3
-	jmp .end_switch
-	.key_right:
-	mov byte [snake2+snake_t.input_buf], 0
-	jmp .end_switch
-	.key_up:
-	mov byte [snake2+snake_t.input_buf], 1
-	jmp .end_switch
-	.key_left:
-	mov byte [snake2+snake_t.input_buf], 2
-	jmp .end_switch
-	.key_down:
-	mov byte [snake2+snake_t.input_buf], 3
-	jmp .end_switch
-	.key_l:
-	mov byte [snake3+snake_t.input_buf], 0
-	jmp .end_switch
-	.key_i:
-	mov byte [snake3+snake_t.input_buf], 1
-	jmp .end_switch
-	.key_j:
-	mov byte [snake3+snake_t.input_buf], 2
-	jmp .end_switch
-	.key_k:
-	mov byte [snake3+snake_t.input_buf], 3
-	.end_switch:
+  .key_d:
+  mov byte [snake1+snake_t.input_buf], 0
+  jmp .end_switch
+  .key_w:
+  mov byte [snake1+snake_t.input_buf], 1
+  jmp .end_switch
+  .key_a:
+  mov byte [snake1+snake_t.input_buf], 2
+  jmp .end_switch
+  .key_s:
+  mov byte [snake1+snake_t.input_buf], 3
+  jmp .end_switch
+  .key_right:
+  mov byte [snake2+snake_t.input_buf], 0
+  jmp .end_switch
+  .key_up:
+  mov byte [snake2+snake_t.input_buf], 1
+  jmp .end_switch
+  .key_left:
+  mov byte [snake2+snake_t.input_buf], 2
+  jmp .end_switch
+  .key_down:
+  mov byte [snake2+snake_t.input_buf], 3
+  jmp .end_switch
+  .key_l:
+  mov byte [snake3+snake_t.input_buf], 0
+  jmp .end_switch
+  .key_i:
+  mov byte [snake3+snake_t.input_buf], 1
+  jmp .end_switch
+  .key_j:
+  mov byte [snake3+snake_t.input_buf], 2
+  jmp .end_switch
+  .key_k:
+  mov byte [snake3+snake_t.input_buf], 3
+  .end_switch:
 
-	.ret:
+  .ret:
 endfn
 
 ; Points are distributed based on ranking by score:
@@ -621,138 +621,138 @@ fn distribute_points
 ; - second word: the 'snake_t.score' value of the corresponding snake
 .snake_array: local 3 * 4
 
-	cmp byte [num_snakes], 1
-	je .ret
-	cmp byte [num_snakes], 2
-	je .case_2_snakes
-	cmp byte [num_snakes], 3
-	je .case_3_snakes
-	unreachable
+  cmp byte [num_snakes], 1
+  je .ret
+  cmp byte [num_snakes], 2
+  je .case_2_snakes
+  cmp byte [num_snakes], 3
+  je .case_3_snakes
+  unreachable
 
-	.case_2_snakes:
-	mov ax, [snake2+snake_t.score]
-	cmp [snake1+snake_t.score], ax
-	ja .first_snake_wins
-	jb .second_snake_wins
-	; equal score
-	inc dword [points_p1]
-	inc dword [points_p2]
-	jmp .ret
-	.first_snake_wins:
-	add dword [points_p1], 2
-	jmp .ret
-	.second_snake_wins:
-	add dword [points_p2], 2
-	jmp .ret
+  .case_2_snakes:
+  mov ax, [snake2+snake_t.score]
+  cmp [snake1+snake_t.score], ax
+  ja .first_snake_wins
+  jb .second_snake_wins
+  ; equal score
+  inc dword [points_p1]
+  inc dword [points_p2]
+  jmp .ret
+  .first_snake_wins:
+  add dword [points_p1], 2
+  jmp .ret
+  .second_snake_wins:
+  add dword [points_p2], 2
+  jmp .ret
 
-	.case_3_snakes:
-	mov word [ebp+.snake_array], 0
-	mov ax, [snake1+snake_t.score]
-	mov [ebp+.snake_array + 2], ax
-	mov word [ebp+.snake_array + 4], 1
-	mov ax, [snake2+snake_t.score]
-	mov [ebp+.snake_array + 6], ax
-	mov word [ebp+.snake_array + 8], 2
-	mov ax, [snake3+snake_t.score]
-	mov [ebp+.snake_array + 10], ax
+  .case_3_snakes:
+  mov word [ebp+.snake_array], 0
+  mov ax, [snake1+snake_t.score]
+  mov [ebp+.snake_array + 2], ax
+  mov word [ebp+.snake_array + 4], 1
+  mov ax, [snake2+snake_t.score]
+  mov [ebp+.snake_array + 6], ax
+  mov word [ebp+.snake_array + 8], 2
+  mov ax, [snake3+snake_t.score]
+  mov [ebp+.snake_array + 10], ax
 
-	; sort '.snake_array' in descending order by score
-	; NOTE: As the score is stored in the most significant word, comparing the
-	;       dwords directly suffices.
-	%macro _compare_and_xchg_dword 2
-		mov eax, [%1]
-		mov ebx, [%2]
-		cmp eax, ebx
-		jae %%skip
-		mov [%1], ebx
-		mov [%2], eax
-		%%skip:
-	%endmacro
-	_compare_and_xchg_dword {ebp+.snake_array}, {ebp+.snake_array + 4}
-	_compare_and_xchg_dword {ebp+.snake_array}, {ebp+.snake_array + 8}
-	_compare_and_xchg_dword {ebp+.snake_array + 4}, {ebp+.snake_array + 8}
+  ; sort '.snake_array' in descending order by score
+  ; NOTE: As the score is stored in the most significant word, comparing the
+  ;       dwords directly suffices.
+  %macro _compare_and_xchg_dword 2
+    mov eax, [%1]
+    mov ebx, [%2]
+    cmp eax, ebx
+    jae %%skip
+    mov [%1], ebx
+    mov [%2], eax
+    %%skip:
+  %endmacro
+  _compare_and_xchg_dword {ebp+.snake_array}, {ebp+.snake_array + 4}
+  _compare_and_xchg_dword {ebp+.snake_array}, {ebp+.snake_array + 8}
+  _compare_and_xchg_dword {ebp+.snake_array + 4}, {ebp+.snake_array + 8}
 
-	mov ax, [ebp+.snake_array + 6]
-	cmp [ebp+.snake_array + 2], ax
-	je .equal_1st_and_2nd
+  mov ax, [ebp+.snake_array + 6]
+  cmp [ebp+.snake_array + 2], ax
+  je .equal_1st_and_2nd
 
-	movzx eax, word [ebp+.snake_array]
-	add dword [points + 4 * eax], 4
+  movzx eax, word [ebp+.snake_array]
+  add dword [points + 4 * eax], 4
 
-	mov ax, [ebp+.snake_array + 10]
-	cmp [ebp+.snake_array + 6], ax
-	je .equal_2nd_and_3rd
+  mov ax, [ebp+.snake_array + 10]
+  cmp [ebp+.snake_array + 6], ax
+  je .equal_2nd_and_3rd
 
-	movzx eax, word [ebp+.snake_array + 4]
-	add dword [points + 4 * eax], 2
-	jmp .ret
+  movzx eax, word [ebp+.snake_array + 4]
+  add dword [points + 4 * eax], 2
+  jmp .ret
 
-	.equal_2nd_and_3rd:
-	movzx eax, word [ebp+.snake_array + 4]
-	inc dword [points + 4 * eax]
-	movzx eax, word [ebp+.snake_array + 8]
-	inc dword [points + 4 * eax]
-	jmp .ret
+  .equal_2nd_and_3rd:
+  movzx eax, word [ebp+.snake_array + 4]
+  inc dword [points + 4 * eax]
+  movzx eax, word [ebp+.snake_array + 8]
+  inc dword [points + 4 * eax]
+  jmp .ret
 
-	.equal_1st_and_2nd:
-	mov ax, [ebp+.snake_array + 10]
-	cmp [ebp+.snake_array + 6], ax
-	je .all_equal
+  .equal_1st_and_2nd:
+  mov ax, [ebp+.snake_array + 10]
+  cmp [ebp+.snake_array + 6], ax
+  je .all_equal
 
-	movzx eax, word [ebp+.snake_array]
-	add dword [points + 4 * eax], 3
-	movzx eax, word [ebp+.snake_array + 4]
-	add dword [points + 4 * eax], 3
-	jmp .ret
+  movzx eax, word [ebp+.snake_array]
+  add dword [points + 4 * eax], 3
+  movzx eax, word [ebp+.snake_array + 4]
+  add dword [points + 4 * eax], 3
+  jmp .ret
 
-	.all_equal:
-	inc dword [points_p1]
-	inc dword [points_p2]
-	inc dword [points_p3]
+  .all_equal:
+  inc dword [points_p1]
+  inc dword [points_p2]
+  inc dword [points_p3]
 
-	.ret:
+  .ret:
 endfn
 
 ; smallest "unit" of snakes: a 1 pixel wide and 'SNAKE_SIZE' long line
 struc snake_segment_t
-; position of the segment
-; The exact meaning of '.pos' depends on the direction '.dir': '.pos' represents
-; the left edge of the segment relative to the direction of movement ('.dir'),
-; i.e. if '.dir' is right, '.pos' indicates the position of the top pixel, but
-; if '.dir' is left, '.pos' indicates the position of the bottom pixel.
-.pos: resb 4
-; see [General Note - Representation of Directions]
-.dir: resb 1
+  ; position of the segment
+  ; The exact meaning of '.pos' depends on the direction '.dir': '.pos' represents
+  ; the left edge of the segment relative to the direction of movement ('.dir'),
+  ; i.e. if '.dir' is right, '.pos' indicates the position of the top pixel, but
+  ; if '.dir' is left, '.pos' indicates the position of the bottom pixel.
+  .pos: resb 4
+  ; see [General Note - Representation of Directions]
+  .dir: resb 1
 endstruc
 struc snake_t
-	; number of segments
-	; must be >= 'SNAKE_HEAD_LEN'
-	.len: resb 4
-	; indicates the snake's status and fadeout opacity:
-	; 0 <-> snake is alive
-	; 1 to 'SNAKE_FADEOUT_TICKS' <-> snake is dead and fading out
-	; 'SNAKE_FADEOUT_TICKS' + 1 <-> snake is dead and invisible
-	.dead: resb 1
-	; temporary field to make snake movement easier, not part of the actual snake
-	.next_head: resb snake_segment_t_size
-	; contains '.len' segments in the order of the snake, starting from the head
-	; NOTE: a snake can have at most ceil(WORLD_SIZE^2 / SNAKE_SIZE) segments
-	.segments: resb (snake_segment_t_size * WORLD_SIZE * WORLD_SIZE + SNAKE_SIZE - 1) / SNAKE_SIZE
+  ; number of segments
+  ; must be >= 'SNAKE_HEAD_LEN'
+  .len: resb 4
+  ; indicates the snake's status and fadeout opacity:
+  ; 0 <-> snake is alive
+  ; 1 to 'SNAKE_FADEOUT_TICKS' <-> snake is dead and fading out
+  ; 'SNAKE_FADEOUT_TICKS' + 1 <-> snake is dead and invisible
+  .dead: resb 1
+  ; temporary field to make snake movement easier, not part of the actual snake
+  .next_head: resb snake_segment_t_size
+  ; contains '.len' segments in the order of the snake, starting from the head
+  ; NOTE: a snake can have at most ceil(WORLD_SIZE^2 / SNAKE_SIZE) segments
+  .segments: resb (snake_segment_t_size * WORLD_SIZE * WORLD_SIZE + SNAKE_SIZE - 1) / SNAKE_SIZE
 
-	.score: resb 2
+  .score: resb 2
 
-	; see also [General Note - Representation of Directions]
+  ; see also [General Note - Representation of Directions]
 
-	; After the snake has turned, another turn in the same direction would cause a
-	; self-collision. To prevent this specific self-collision, the blocked
-	; direction after a direction change is stored in '.blocked_dir'. If there is
-	; no blocked directions, '.blocked_dir' contains -1.
-	.blocked_dir: resb 1
-	; number of ticks since the last direction change, used to reset
-	; '.blocked_dir' to -1
-	.last_dir_change: resb 4
-	; next proposed direction by the player
-	.input_buf: resb 1
+  ; After the snake has turned, another turn in the same direction would cause a
+  ; self-collision. To prevent this specific self-collision, the blocked
+  ; direction after a direction change is stored in '.blocked_dir'. If there is
+  ; no blocked directions, '.blocked_dir' contains -1.
+  .blocked_dir: resb 1
+  ; number of ticks since the last direction change, used to reset
+  ; '.blocked_dir' to -1
+  .last_dir_change: resb 4
+  ; next proposed direction by the player
+  .input_buf: resb 1
 endstruc
 
 %define INIT_SNAKE_POS_Y (WORLD_SIZE - INIT_SNAKE_LEN - 2 * SNAKE_SIZE)
@@ -763,48 +763,48 @@ static_assert {INIT_SNAKE_POS_Y > 0}
 fn setup_snakes
 .num_snakes: arg 1
 
-	mov word [snake_speed], SNAKE_SPEED_1_PLAYER
-	cmp byte [ebp+.num_snakes], 1
-	je .setup_1_snake
-	mov word [snake_speed], SNAKE_SPEED_2_PLAYER
-	cmp byte [ebp+.num_snakes], 2
-	je .setup_3_snakes
-	mov word [snake_speed], SNAKE_SPEED_3_PLAYER
-	cmp byte [ebp+.num_snakes], 3
-	je .setup_3_snakes
-	unreachable
+  mov word [snake_speed], SNAKE_SPEED_1_PLAYER
+  cmp byte [ebp+.num_snakes], 1
+  je .setup_1_snake
+  mov word [snake_speed], SNAKE_SPEED_2_PLAYER
+  cmp byte [ebp+.num_snakes], 2
+  je .setup_3_snakes
+  mov word [snake_speed], SNAKE_SPEED_3_PLAYER
+  cmp byte [ebp+.num_snakes], 3
+  je .setup_3_snakes
+  unreachable
 
-	.setup_1_snake:
-	push dword INIT_SNAKE_LEN
-	pushb 1 ; dir
-	push dword INIT_SNAKE_POS_MIDDLE
-	push snake1
-	call setup_snake
-	jmp .end_switch
+  .setup_1_snake:
+  push dword INIT_SNAKE_LEN
+  pushb 1 ; dir
+  push dword INIT_SNAKE_POS_MIDDLE
+  push snake1
+  call setup_snake
+  jmp .end_switch
 
-	; setup all 3 snakes, although not all are necessarily used
-	.setup_3_snakes:
-	push dword INIT_SNAKE_LEN
-	pushb 1 ; dir
-	push dword INIT_SNAKE_POS_LEFT
-	push snake1
-	call setup_snake
+  ; setup all 3 snakes, although not all are necessarily used
+  .setup_3_snakes:
+  push dword INIT_SNAKE_LEN
+  pushb 1 ; dir
+  push dword INIT_SNAKE_POS_LEFT
+  push snake1
+  call setup_snake
 
-	push dword INIT_SNAKE_LEN
-	pushb 1 ; dir
-	push dword INIT_SNAKE_POS_RIGHT
-	push snake2
-	call setup_snake
+  push dword INIT_SNAKE_LEN
+  pushb 1 ; dir
+  push dword INIT_SNAKE_POS_RIGHT
+  push snake2
+  call setup_snake
 
-	push dword INIT_SNAKE_LEN
-	pushb 1 ; dir
-	push dword INIT_SNAKE_POS_MIDDLE
-	push snake3
-	call setup_snake
-	.end_switch:
+  push dword INIT_SNAKE_LEN
+  pushb 1 ; dir
+  push dword INIT_SNAKE_POS_MIDDLE
+  push snake3
+  call setup_snake
+  .end_switch:
 
-	mov al, [ebp+.num_snakes]
-	mov [num_snakes], al
+  mov al, [ebp+.num_snakes]
+  mov [num_snakes], al
 endfn
 fn setup_snake
 .out: arg 4
@@ -812,50 +812,50 @@ fn setup_snake
 .dir: arg 1 ; direction the snake is facing
 .len: arg 4
 
-	mov edi, [ebp+.out]
+  mov edi, [ebp+.out]
 
-	mov eax, [ebp+.pos]
-	lea edx, [edi+snake_t.segments]
-	mov ecx, [ebp+.len]
-	.loop:
-		mov eax, [ebp+.pos]
-		mov dword [edx + snake_segment_t.pos], eax
-		mov al, [ebp+.dir]
-		mov byte [edx + snake_segment_t.dir], al
+  mov eax, [ebp+.pos]
+  lea edx, [edi+snake_t.segments]
+  mov ecx, [ebp+.len]
+  .loop:
+    mov eax, [ebp+.pos]
+    mov dword [edx + snake_segment_t.pos], eax
+    mov al, [ebp+.dir]
+    mov byte [edx + snake_segment_t.dir], al
 
-		; move '.pos' 1 pixel in the opposite direction of '.dir'
-		pushb [ebp+.dir]
-		call get_dir_offset
-		sub [ebp+.pos], eax
+    ; move '.pos' 1 pixel in the opposite direction of '.dir'
+    pushb [ebp+.dir]
+    call get_dir_offset
+    sub [ebp+.pos], eax
 
-		add edx, snake_segment_t_size
-	loop .loop
+    add edx, snake_segment_t_size
+  loop .loop
 
-	mov eax, [ebp+.len]
-	mov dword [edi+snake_t.len], eax
-	mov byte [edi+snake_t.dead], 0
-	mov word [edi+snake_t.score], 0
-	mov byte [edi+snake_t.input_buf], -1
-	mov byte [edi+snake_t.blocked_dir], -1
-	mov byte [edi+snake_t.last_dir_change], 0
+  mov eax, [ebp+.len]
+  mov dword [edi+snake_t.len], eax
+  mov byte [edi+snake_t.dead], 0
+  mov word [edi+snake_t.score], 0
+  mov byte [edi+snake_t.input_buf], -1
+  mov byte [edi+snake_t.blocked_dir], -1
+  mov byte [edi+snake_t.last_dir_change], 0
 endfn
 
 fn setup_targets
 .num_targets: arg 1
 
-	mov byte [num_targets], 0
+  mov byte [num_targets], 0
 
-	.loop:
-		; NOTE: 'fill_object_buf' depends on 'num_targets'
-		call fill_object_buf
+  .loop:
+    ; NOTE: 'fill_object_buf' depends on 'num_targets'
+    call fill_object_buf
 
-		inc byte [num_targets]
-		pushb [num_targets]
-		call setup_target
+    inc byte [num_targets]
+    pushb [num_targets]
+    call setup_target
 
-		mov al, [num_targets]
-		cmp al, [ebp+.num_targets]
-	jb .loop
+    mov al, [num_targets]
+    cmp al, [ebp+.num_targets]
+  jb .loop
 endfn
 ; NOTE: Because the world frame is one pixel wide, the x and y coordinates of
 ;       targets range between 1 and 'WORLD_SIZE' - 'TARGET_SIZE' - 1.
@@ -864,80 +864,80 @@ endfn
 fn setup_target
 .target_idx: arg 1
 
-	; There are N := ('WORLD_SIZE' - 'TARGET_SIZE' - 2)^2 possible positions for
-	; the target. This function places the target at a random unoccupied position
-	; by testing N random positions. If none are found, all positions are tested
-	; and the first unoccupied is picked.
-	; This fallback should rarely happen. If there are still n unoccupied
-	; positions, the probability of not finding one of those is:
-	; (1 - n/N)^N approx exp(-n) for n << N
+  ; There are N := ('WORLD_SIZE' - 'TARGET_SIZE' - 2)^2 possible positions for
+  ; the target. This function places the target at a random unoccupied position
+  ; by testing N random positions. If none are found, all positions are tested
+  ; and the first unoccupied is picked.
+  ; This fallback should rarely happen. If there are still n unoccupied
+  ; positions, the probability of not finding one of those is:
+  ; (1 - n/N)^N approx exp(-n) for n << N
 
-	movzx edx, byte [ebp+.target_idx]
+  movzx edx, byte [ebp+.target_idx]
 
-	mov ecx, TARGET_COORD_RANGE * TARGET_COORD_RANGE
-	.loop:
-		call get_random_target_pos
-		mov [targets + 4 * (edx - 1)], eax
-		pushb [ebp+.target_idx]
-		push eax
-		call check_target_pos
-		test eax, eax
-		jnz .ret
-	loop .loop
+  mov ecx, TARGET_COORD_RANGE * TARGET_COORD_RANGE
+  .loop:
+    call get_random_target_pos
+    mov [targets + 4 * (edx - 1)], eax
+    pushb [ebp+.target_idx]
+    push eax
+    call check_target_pos
+    test eax, eax
+    jnz .ret
+  loop .loop
 
-	mov edi, 1 + 1 * FB_WIDTH
-	mov cl, TARGET_COORD_RANGE
-	.vert_loop:
-		mov ch, TARGET_COORD_RANGE
-		.hor_loop:
-			mov [targets + 4 * (edx - 1)], edi
-			pushb [ebp+.target_idx]
-			push edi
-			call check_target_pos
-			test eax, eax
-			jnz .ret
-			inc edi
-			dec ch
-		jnz .hor_loop
-		add edi, FB_WIDTH - TARGET_COORD_RANGE
-		dec cl
-	jnz .vert_loop
+  mov edi, 1 + 1 * FB_WIDTH
+  mov cl, TARGET_COORD_RANGE
+  .vert_loop:
+    mov ch, TARGET_COORD_RANGE
+    .hor_loop:
+      mov [targets + 4 * (edx - 1)], edi
+      pushb [ebp+.target_idx]
+      push edi
+      call check_target_pos
+      test eax, eax
+      jnz .ret
+      inc edi
+      dec ch
+    jnz .hor_loop
+    add edi, FB_WIDTH - TARGET_COORD_RANGE
+    dec cl
+  jnz .vert_loop
 
-	; if there is no unoccupied position to place the target, shorten the snakes
-	mov esi, snakes
-	movzx ecx, byte [num_snakes]
-	.snake_loop:
-		mov dword [esi+snake_t.len], INIT_SNAKE_LEN
-		add esi, snake_t_size
-	loop .snake_loop
+  ; if there is no unoccupied position to place the target, shorten the snakes
+  mov esi, snakes
+  movzx ecx, byte [num_snakes]
+  .snake_loop:
+    mov dword [esi+snake_t.len], INIT_SNAKE_LEN
+    add esi, snake_t_size
+  loop .snake_loop
 
-	call fill_object_buf
-	pushb [ebp+.target_idx]
-	call setup_target
+  call fill_object_buf
+  pushb [ebp+.target_idx]
+  call setup_target
 
-	.ret:
+  .ret:
 endfn
 fn get_random_target_pos
 .x: local 4
 .y: local 4
 
-	call get_random
-	xor edx, edx
-	mov ebx, TARGET_COORD_RANGE
-	div ebx
-	inc edx
-	mov [ebp+.x], edx
-	call get_random
-	xor edx, edx
-	mov ebx, TARGET_COORD_RANGE
-	div ebx
-	inc edx
-	mov [ebp+.y], edx
+  call get_random
+  xor edx, edx
+  mov ebx, TARGET_COORD_RANGE
+  div ebx
+  inc edx
+  mov [ebp+.x], edx
+  call get_random
+  xor edx, edx
+  mov ebx, TARGET_COORD_RANGE
+  div ebx
+  inc edx
+  mov [ebp+.y], edx
 
-	mov eax, [ebp+.y]
-	mov ebx, FB_WIDTH
-	mul ebx
-	add eax, [ebp+.x]
+  mov eax, [ebp+.y]
+  mov ebx, FB_WIDTH
+  mul ebx
+  add eax, [ebp+.x]
 endfn
 
 ; move alive snakes and update the fadeout opacity of dead snakes
@@ -947,101 +947,101 @@ endfn
 fn update_snakes
 .active_game: local 4
 
-	mov dword [ebp+.active_game], 0
+  mov dword [ebp+.active_game], 0
 
-	mov esi, snakes
-	movzx ecx, byte [num_snakes]
-	.loop:
-		cmp byte [esi+snake_t.dead], 0
-		jne .dead_snake
+  mov esi, snakes
+  movzx ecx, byte [num_snakes]
+  .loop:
+    cmp byte [esi+snake_t.dead], 0
+    jne .dead_snake
 
-		push esi
-		call process_snake_input
-		push esi
-		call move_snake
-		mov dword [ebp+.active_game], 1
-		jmp .continue
+    push esi
+    call process_snake_input
+    push esi
+    call move_snake
+    mov dword [ebp+.active_game], 1
+    jmp .continue
 
-		.dead_snake:
-		cmp byte [esi+snake_t.dead], SNAKE_FADEOUT_TICKS
-		ja .continue
-		inc byte [esi+snake_t.dead]
-		mov dword [ebp+.active_game], 1
+    .dead_snake:
+    cmp byte [esi+snake_t.dead], SNAKE_FADEOUT_TICKS
+    ja .continue
+    inc byte [esi+snake_t.dead]
+    mov dword [ebp+.active_game], 1
 
-		.continue:
-		add esi, snake_t_size
-	loop .loop
+    .continue:
+    add esi, snake_t_size
+  loop .loop
 
-	mov eax, [ebp+.active_game]
+  mov eax, [ebp+.active_game]
 endfn
 
 fn move_snake
 .snake: arg 4
 
-	mov esi, [ebp+.snake]
+  mov esi, [ebp+.snake]
 
-	inc dword [esi+snake_t.last_dir_change]
-	cmp dword [esi+snake_t.last_dir_change], SNAKE_SIZE + SNAKE_TURN_GAP
-	jl .keep_blocked_dir
-	mov byte [esi+snake_t.blocked_dir], -1
-	.keep_blocked_dir:
+  inc dword [esi+snake_t.last_dir_change]
+  cmp dword [esi+snake_t.last_dir_change], SNAKE_SIZE + SNAKE_TURN_GAP
+  jl .keep_blocked_dir
+  mov byte [esi+snake_t.blocked_dir], -1
+  .keep_blocked_dir:
 
-	; move the snake head and store the result in '.next_head'
-	sub esp, snake_segment_t_size
-	memcpy [esp], [esi+snake_t.segments], snake_segment_t_size
-	lea edi, [esi+snake_t.next_head]
-	push edi
-	call move_snake_segment
+  ; move the snake head and store the result in '.next_head'
+  sub esp, snake_segment_t_size
+  memcpy [esp], [esi+snake_t.segments], snake_segment_t_size
+  lea edi, [esi+snake_t.next_head]
+  push edi
+  call move_snake_segment
 
-	; shift the snake segments, i.e. each segment is set to the segment before it
-	; (the head is set to '.next_head')
-	mov ecx, [esi+snake_t.len]
-	lea ecx, [snake_segment_t_size * ecx]
-	lea edi, [esi + snake_t.segments + ecx - 1]
-	lea esi, [esi + snake_t.segments + ecx - snake_segment_t_size - 1]
-	std
-	rep movsb
+  ; shift the snake segments, i.e. each segment is set to the segment before it
+  ; (the head is set to '.next_head')
+  mov ecx, [esi+snake_t.len]
+  lea ecx, [snake_segment_t_size * ecx]
+  lea edi, [esi + snake_t.segments + ecx - 1]
+  lea esi, [esi + snake_t.segments + ecx - snake_segment_t_size - 1]
+  std
+  rep movsb
 endfn
 fn move_snake_segment
 .out: arg 4
 .segment: arg snake_segment_t_size
 
-	mov edi, [ebp+.out]
-	memcpy [edi], [ebp+.segment], snake_segment_t_size
+  mov edi, [ebp+.out]
+  memcpy [edi], [ebp+.segment], snake_segment_t_size
 
-	pushb [ebp+.segment+snake_segment_t.dir]
-	call get_dir_offset
-	add dword [edi+snake_segment_t.pos], eax
+  pushb [ebp+.segment+snake_segment_t.dir]
+  call get_dir_offset
+  add dword [edi+snake_segment_t.pos], eax
 endfn
 
 fn process_snake_input
 .snake: arg 4
 
-	mov esi, [ebp+.snake]
+  mov esi, [ebp+.snake]
 
-	mov dl, [esi+snake_t.input_buf]
-	cmp byte dl, -1
-	je .ret
-	cmp dl, [esi+snake_t.blocked_dir]
-	je .ret
+  mov dl, [esi+snake_t.input_buf]
+  cmp byte dl, -1
+  je .ret
+  cmp dl, [esi+snake_t.blocked_dir]
+  je .ret
 
-	mov byte [esi+snake_t.input_buf], -1
+  mov byte [esi+snake_t.input_buf], -1
 
-	; compute the turn direction 'dl', such that:
-	; new_dir = old_dir + 'dl' (mod 4)
-	sub dl, [esi+snake_t.segments+snake_segment_t.dir]
-	and dl, 0b11
+  ; compute the turn direction 'dl', such that:
+  ; new_dir = old_dir + 'dl' (mod 4)
+  sub dl, [esi+snake_t.segments+snake_segment_t.dir]
+  and dl, 0b11
 
-	test dl, dl
-	jz .ret
-	cmp dl, 2
-	je .ret
+  test dl, dl
+  jz .ret
+  cmp dl, 2
+  je .ret
 
-	pushb dl
-	push esi
-	call turn_snake
+  pushb dl
+  push esi
+  call turn_snake
 
-	.ret:
+  .ret:
 endfn
 ; change the direction of the snake to (old_dir + '.delta_dir') mod 4
 ; This means that the first 'SNAKE_SIZE' segment are changed so that they face
@@ -1053,55 +1053,55 @@ fn turn_snake
 ; the new 'SNAKE_SIZE'-th segment facing the new direction
 .base_segment: local snake_segment_t_size
 
-	mov esi, [ebp+.snake]
+  mov esi, [ebp+.snake]
 
-	mov al, [esi+snake_t.segments+snake_segment_t.dir]
-	add al, [ebp+.delta_dir]
-	and al, 0b11
-	mov [ebp+.new_dir], al
+  mov al, [esi+snake_t.segments+snake_segment_t.dir]
+  add al, [ebp+.delta_dir]
+  and al, 0b11
+  mov [ebp+.new_dir], al
 
-	mov bl, [ebp+.new_dir]
-	mov [ebp+.base_segment+snake_segment_t.dir], bl
-	mov eax, [esi+snake_t.segments+snake_segment_t.pos]
-	mov [ebp+.base_segment+snake_segment_t.pos], eax
+  mov bl, [ebp+.new_dir]
+  mov [ebp+.base_segment+snake_segment_t.dir], bl
+  mov eax, [esi+snake_t.segments+snake_segment_t.pos]
+  mov [ebp+.base_segment+snake_segment_t.pos], eax
 
-	; when turning right, '.base_segment' is already correct, but when turning
-	; left, the position of '.base_segment' needs to be adjusted
-	cmp byte [ebp+.delta_dir], 3
-	je .right_turn
-	pushb [esi+snake_t.segments+snake_segment_t.dir]
-	call get_dir_offset
-	mov edx, eax
-	pushb [ebp+.new_dir]
-	call get_dir_offset
-	add eax, edx
-	mov ebx, SNAKE_SIZE - 1
-	imul ebx
-	sub [ebp+.base_segment+snake_segment_t.pos], eax
-	.right_turn:
+  ; when turning right, '.base_segment' is already correct, but when turning
+  ; left, the position of '.base_segment' needs to be adjusted
+  cmp byte [ebp+.delta_dir], 3
+  je .right_turn
+  pushb [esi+snake_t.segments+snake_segment_t.dir]
+  call get_dir_offset
+  mov edx, eax
+  pushb [ebp+.new_dir]
+  call get_dir_offset
+  add eax, edx
+  mov ebx, SNAKE_SIZE - 1
+  imul ebx
+  sub [ebp+.base_segment+snake_segment_t.pos], eax
+  .right_turn:
 
-	; '.base_segment' now contains the correctly facing 'SNAKE_SIZE'-th segment,
-	; the remaining segments can be obtained by moving '.base_segment' one step in
-	; its direction.
-	lea edi, [esi+snake_t.segments + (SNAKE_SIZE - 1) * snake_segment_t_size]
-	mov ecx, SNAKE_SIZE
-	.loop:
-		memcpy [edi], [ebp+.base_segment], snake_segment_t_size
+  ; '.base_segment' now contains the correctly facing 'SNAKE_SIZE'-th segment,
+  ; the remaining segments can be obtained by moving '.base_segment' one step in
+  ; its direction.
+  lea edi, [esi+snake_t.segments + (SNAKE_SIZE - 1) * snake_segment_t_size]
+  mov ecx, SNAKE_SIZE
+  .loop:
+    memcpy [edi], [ebp+.base_segment], snake_segment_t_size
 
-		sub esp, snake_segment_t_size
-		memcpy [esp], [ebp+.base_segment], snake_segment_t_size
-		lea edx, [ebp+.base_segment]
-		push edx
-		call move_snake_segment
+    sub esp, snake_segment_t_size
+    memcpy [esp], [ebp+.base_segment], snake_segment_t_size
+    lea edx, [ebp+.base_segment]
+    push edx
+    call move_snake_segment
 
-		sub edi, snake_segment_t_size
-	loop .loop
+    sub edi, snake_segment_t_size
+  loop .loop
 
-	mov al, [ebp+.new_dir]
-	add al, [ebp+.delta_dir]
-	and al, 0b11
-	mov byte [esi+snake_t.blocked_dir], al
-	mov dword [esi+snake_t.last_dir_change], 0
+  mov al, [ebp+.new_dir]
+  add al, [ebp+.delta_dir]
+  and al, 0b11
+  mov byte [esi+snake_t.blocked_dir], al
+  mov dword [esi+snake_t.last_dir_change], 0
 endfn
 
 ; extend the snake by appending the last segment '.len_inc' times
@@ -1109,19 +1109,19 @@ fn extend_snake
 .snake: arg 4
 .len_inc: arg 4
 
-	mov esi, [ebp+.snake]
+  mov esi, [ebp+.snake]
 
-	mov eax, [esi+snake_t.len]
-	lea eax, [snake_segment_t_size * eax]
-	lea edi, [esi+snake_t.segments + eax]
-	mov ecx, [ebp+.len_inc]
-	.loop:
-		memcpy [edi], [edi-snake_segment_t_size], snake_segment_t_size
-		add edi, snake_segment_t_size
-	loop .loop
+  mov eax, [esi+snake_t.len]
+  lea eax, [snake_segment_t_size * eax]
+  lea edi, [esi+snake_t.segments + eax]
+  mov ecx, [ebp+.len_inc]
+  .loop:
+    memcpy [edi], [edi-snake_segment_t_size], snake_segment_t_size
+    add edi, snake_segment_t_size
+  loop .loop
 
-	mov eax, [ebp+.len_inc]
-	add [esi+snake_t.len], eax
+  mov eax, [ebp+.len_inc]
+  add [esi+snake_t.len], eax
 endfn
 
 ; ==================================================================================================
@@ -1135,119 +1135,119 @@ static_assert {MAX_TARGETS < 255}
 %define BLOCKER_ID 255
 
 fn handle_collisions
-	call fill_object_buf
+  call fill_object_buf
 
-	mov esi, snakes
-	movzx ecx, byte [num_snakes]
-	.loop:
-		cmp byte [esi+snake_t.dead], 0
-		jne .continue
-		push esi
-		call handle_snake_collisions
-		.continue:
-		add esi, snake_t_size
-	loop .loop
+  mov esi, snakes
+  movzx ecx, byte [num_snakes]
+  .loop:
+    cmp byte [esi+snake_t.dead], 0
+    jne .continue
+    push esi
+    call handle_snake_collisions
+    .continue:
+    add esi, snake_t_size
+  loop .loop
 endfn
 
 fn fill_object_buf
-	; clear object buffer
-	xor al, al
-	mov ecx, FB_SIZE
-	mov edi, object_buf
-	cld
-	rep stosb
+  ; clear object buffer
+  xor al, al
+  mov ecx, FB_SIZE
+  mov edi, object_buf
+  cld
+  rep stosb
 
-	; NOTE: The snakes must be added to the object buffer *after* the targets to
-	;       ensure that any targets inside the snake are overdrawn. This is
-	;       necessary because when a target is reached, it can be placed at the
-	;       same position again, causing it to be inside the snake on the next
-	;       frame.
+  ; NOTE: The snakes must be added to the object buffer *after* the targets to
+  ;       ensure that any targets inside the snake are overdrawn. This is
+  ;       necessary because when a target is reached, it can be placed at the
+  ;       same position again, causing it to be inside the snake on the next
+  ;       frame.
 
-	mov esi, targets
-	mov dl, 1
-	.targets_loop:
-		cmp dl, byte [num_targets]
-		ja .end_targets_loop
+  mov esi, targets
+  mov dl, 1
+  .targets_loop:
+    cmp dl, byte [num_targets]
+    ja .end_targets_loop
 
-		push dword object_buf
-		pushb dl
-		push dword [esi]
-		call draw_target
+    push dword object_buf
+    pushb dl
+    push dword [esi]
+    call draw_target
 
-		add esi, 4
-		inc dl
-	jmp .targets_loop
-	.end_targets_loop:
+    add esi, 4
+    inc dl
+  jmp .targets_loop
+  .end_targets_loop:
 
-	mov esi, snakes
-	movzx ecx, byte [num_snakes]
-	.snakes_loop:
-		cmp byte [esi+snake_t.dead], 0
-		jne .continue
+  mov esi, snakes
+  movzx ecx, byte [num_snakes]
+  .snakes_loop:
+    cmp byte [esi+snake_t.dead], 0
+    jne .continue
 
-		; NOTE: The collision detection checks every position of the first segment
-		;       for colliding objects. To prevent detecting the snake's own first
-		;       segment as a collision, it's not added to the object buffer.
-		pushb BLOCKER_ID
-		push dword [esi+snake_t.len]
-		push dword 1 ; skip first segment
-		push dword object_buf
-		push esi
-		call draw_snake_segments_in_range
+    ; NOTE: The collision detection checks every position of the first segment
+    ;       for colliding objects. To prevent detecting the snake's own first
+    ;       segment as a collision, it's not added to the object buffer.
+    pushb BLOCKER_ID
+    push dword [esi+snake_t.len]
+    push dword 1 ; skip first segment
+    push dword object_buf
+    push esi
+    call draw_snake_segments_in_range
 
-		.continue:
-		add esi, snake_t_size
-	loop .snakes_loop
+    .continue:
+    add esi, snake_t_size
+  loop .snakes_loop
 
-	push dword object_buf
-	pushb BLOCKER_ID
-	call draw_world_frame
+  push dword object_buf
+  pushb BLOCKER_ID
+  call draw_world_frame
 endfn
 
 fn handle_snake_collisions
 .snake: arg 4
 .segment_dir_offset: local 4
 
-	mov esi, [ebp+.snake]
+  mov esi, [ebp+.snake]
 
-	mov edx, [esi+snake_t.segments+snake_segment_t.pos]
-	pushb [esi+snake_t.segments+snake_segment_t.dir]
-	dec byte [esp]
-	and byte [esp], 0b11
-	call get_dir_offset
-	mov [ebp+.segment_dir_offset], eax
+  mov edx, [esi+snake_t.segments+snake_segment_t.pos]
+  pushb [esi+snake_t.segments+snake_segment_t.dir]
+  dec byte [esp]
+  and byte [esp], 0b11
+  call get_dir_offset
+  mov [ebp+.segment_dir_offset], eax
 
-	; loop over every position of the first segment to check for collisions
-	mov ecx, SNAKE_SIZE
-	.loop:
-		mov bl, [object_buf + edx]
-		test bl, bl
-		jz .continue
+  ; loop over every position of the first segment to check for collisions
+  mov ecx, SNAKE_SIZE
+  .loop:
+    mov bl, [object_buf + edx]
+    test bl, bl
+    jz .continue
 
-		cmp byte [esi+snake_t.dead], 0
-		jne .skip_blocker_coll_handler
-		cmp bl, BLOCKER_ID
-		jne .skip_blocker_coll_handler
-		push esi
-		call handle_snake_death
-		.skip_blocker_coll_handler:
+    cmp byte [esi+snake_t.dead], 0
+    jne .skip_blocker_coll_handler
+    cmp bl, BLOCKER_ID
+    jne .skip_blocker_coll_handler
+    push esi
+    call handle_snake_death
+    .skip_blocker_coll_handler:
 
-		cmp bl, byte [num_targets]
-		ja .skip_target_coll_handler
-		; reposition the colliding target
-		pushb bl
-		call setup_target
-		call fill_object_buf
+    cmp bl, byte [num_targets]
+    ja .skip_target_coll_handler
+    ; reposition the colliding target
+    pushb bl
+    call setup_target
+    call fill_object_buf
 
-		push dword SNAKE_TARGET_GROWTH
-		push esi
-		call extend_snake
-		inc word [esi+snake_t.score]
-		.skip_target_coll_handler:
+    push dword SNAKE_TARGET_GROWTH
+    push esi
+    call extend_snake
+    inc word [esi+snake_t.score]
+    .skip_target_coll_handler:
 
-		.continue:
-		add edx, [ebp+.segment_dir_offset]
-	loop .loop
+    .continue:
+    add edx, [ebp+.segment_dir_offset]
+  loop .loop
 endfn
 
 ; checks whether '.pos' is a valid position to place the target '.target_idx'
@@ -1257,125 +1257,125 @@ fn check_target_pos
 .pos: arg 4
 .target_idx: arg 1
 
-	mov dl, [ebp+.target_idx]
+  mov dl, [ebp+.target_idx]
 
-	mov eax, [ebp+.pos]
-	lea edi, [object_buf + eax]
+  mov eax, [ebp+.pos]
+  lea edi, [object_buf + eax]
 
-	mov cl, TARGET_SIZE
-	.vert_loop:
-		mov ch, TARGET_SIZE
-		.hor_loop:
-			cmp byte [edi], 0
-			je .continue
-			cmp byte [edi], dl
-			jne .ret_false
-			.continue:
-			inc edi
-			dec ch
-		jnz .hor_loop
-		add edi, FB_WIDTH - TARGET_SIZE
-		dec cl
-	jnz .vert_loop
+  mov cl, TARGET_SIZE
+  .vert_loop:
+    mov ch, TARGET_SIZE
+    .hor_loop:
+      cmp byte [edi], 0
+      je .continue
+      cmp byte [edi], dl
+      jne .ret_false
+      .continue:
+      inc edi
+      dec ch
+    jnz .hor_loop
+    add edi, FB_WIDTH - TARGET_SIZE
+    dec cl
+  jnz .vert_loop
 
-	mov eax, 1
-	jmp .ret
-	.ret_false:
-	xor eax, eax
-	.ret:
+  mov eax, 1
+  jmp .ret
+  .ret_false:
+  xor eax, eax
+  .ret:
 endfn
 
 fn handle_snake_death
 .snake: arg 4
 
-	mov esi, [ebp+.snake]
-	mov byte [esi+snake_t.dead], 1
-	; retract the colliding segment
-	memcpy [esi+snake_t.segments], [esi+snake_t.segments+snake_segment_t_size], snake_segment_t_size
+  mov esi, [ebp+.snake]
+  mov byte [esi+snake_t.dead], 1
+  ; retract the colliding segment
+  memcpy [esi+snake_t.segments], [esi+snake_t.segments+snake_segment_t_size], snake_segment_t_size
 
-	cmp byte [num_snakes], 1
-	jbe .ret
+  cmp byte [num_snakes], 1
+  jbe .ret
 
-	; if the current countdown is longer than the newly calculated one, shorten it
-	; NOTE: As 'endgame_countdown' is -1 when the countdown has not yet started,
-	;       the countdown will always be started in this case.
-	call calculate_endgame_countdown_length
-	cmp ax, [endgame_countdown]
-	jae .ret
-	mov [endgame_countdown], ax
-	mov word [endgame_countdown_substep], 0
+  ; if the current countdown is longer than the newly calculated one, shorten it
+  ; NOTE: As 'endgame_countdown' is -1 when the countdown has not yet started,
+  ;       the countdown will always be started in this case.
+  call calculate_endgame_countdown_length
+  cmp ax, [endgame_countdown]
+  jae .ret
+  mov [endgame_countdown], ax
+  mov word [endgame_countdown_substep], 0
 
-	.ret:
+  .ret:
 endfn
 ; see the comment above 'ENDGAME_COUNTDOWN_MIN_LENGTH' for an explanation
 fn calculate_endgame_countdown_length
 .num_alive_snakes: local 4
 
-	xor eax, eax
-	mov dword [ebp+.num_alive_snakes], 0
-	mov esi, snakes
-	movzx ecx, byte [num_snakes]
-	.loop:
-		cmp byte [esi+snake_t.dead], 0
-		jne .continue
-		add eax, [esi+snake_t.len]
-		inc dword [ebp+.num_alive_snakes]
-		.continue:
-		add esi, snake_t_size
-	loop .loop
+  xor eax, eax
+  mov dword [ebp+.num_alive_snakes], 0
+  mov esi, snakes
+  movzx ecx, byte [num_snakes]
+  .loop:
+    cmp byte [esi+snake_t.dead], 0
+    jne .continue
+    add eax, [esi+snake_t.len]
+    inc dword [ebp+.num_alive_snakes]
+    .continue:
+    add esi, snake_t_size
+  loop .loop
 
-	cmp eax, ENDGAME_COUNTDOWN_MIN_SNAKE_LEN
-	ja .skip_lower_clamping
-	mov eax, ENDGAME_COUNTDOWN_MIN_LENGTH
-	jmp .ret
-	.skip_lower_clamping:
+  cmp eax, ENDGAME_COUNTDOWN_MIN_SNAKE_LEN
+  ja .skip_lower_clamping
+  mov eax, ENDGAME_COUNTDOWN_MIN_LENGTH
+  jmp .ret
+  .skip_lower_clamping:
 
-	cmp eax, ENDGAME_COUNTDOWN_MAX_SNAKE_LEN
-	jb .skip_upper_clamping
-	mov eax, ENDGAME_COUNTDOWN_MAX_LENGTH
-	jmp .ret
-	.skip_upper_clamping:
+  cmp eax, ENDGAME_COUNTDOWN_MAX_SNAKE_LEN
+  jb .skip_upper_clamping
+  mov eax, ENDGAME_COUNTDOWN_MAX_LENGTH
+  jmp .ret
+  .skip_upper_clamping:
 
-	sub eax, ENDGAME_COUNTDOWN_MIN_SNAKE_LEN
-	mov ebx, ENDGAME_COUNTDOWN_MAX_LENGTH - ENDGAME_COUNTDOWN_MIN_LENGTH
-	mul ebx
-	mov ebx, ENDGAME_COUNTDOWN_MAX_SNAKE_LEN - ENDGAME_COUNTDOWN_MIN_SNAKE_LEN
-	div ebx
-	add eax, ENDGAME_COUNTDOWN_MIN_LENGTH
+  sub eax, ENDGAME_COUNTDOWN_MIN_SNAKE_LEN
+  mov ebx, ENDGAME_COUNTDOWN_MAX_LENGTH - ENDGAME_COUNTDOWN_MIN_LENGTH
+  mul ebx
+  mov ebx, ENDGAME_COUNTDOWN_MAX_SNAKE_LEN - ENDGAME_COUNTDOWN_MIN_SNAKE_LEN
+  div ebx
+  add eax, ENDGAME_COUNTDOWN_MIN_LENGTH
 
-	.ret:
-	mul dword [ebp+.num_alive_snakes]
+  .ret:
+  mul dword [ebp+.num_alive_snakes]
 endfn
 
 fn handle_endgame_countdown
-	cmp word [endgame_countdown], 0
-	jle .ret
+  cmp word [endgame_countdown], 0
+  jle .ret
 
-	; As the game runs at a frequency of 'snake_speed' Hz, ticks must be
-	; accumulated in order to update the countdown at 1 Hz.
-	inc word [endgame_countdown_substep]
-	mov ax, [snake_speed]
-	cmp word [endgame_countdown_substep], ax
-	jb .ret
+  ; As the game runs at a frequency of 'snake_speed' Hz, ticks must be
+  ; accumulated in order to update the countdown at 1 Hz.
+  inc word [endgame_countdown_substep]
+  mov ax, [snake_speed]
+  cmp word [endgame_countdown_substep], ax
+  jb .ret
 
-	dec word [endgame_countdown]
-	mov word [endgame_countdown_substep], 0
+  dec word [endgame_countdown]
+  mov word [endgame_countdown_substep], 0
 
-	cmp word [endgame_countdown], 0
-	jne .ret
+  cmp word [endgame_countdown], 0
+  jne .ret
 
-	; kill the remaining snakes
-	mov esi, snakes
-	movzx ecx, byte [num_snakes]
-	.loop:
-		cmp byte [esi+snake_t.dead], 0
-		jne .continue
-		mov byte [esi+snake_t.dead], 1
-		.continue:
-		add esi, snake_t_size
-	loop .loop
+  ; kill the remaining snakes
+  mov esi, snakes
+  movzx ecx, byte [num_snakes]
+  .loop:
+    cmp byte [esi+snake_t.dead], 0
+    jne .continue
+    mov byte [esi+snake_t.dead], 1
+    .continue:
+    add esi, snake_t_size
+  loop .loop
 
-	.ret:
+  .ret:
 endfn
 
 ; ==================================================================================================
@@ -1383,24 +1383,24 @@ endfn
 ; ==================================================================================================
 
 fn render_game
-	call clear_screen_buf
+  call clear_screen_buf
 
-	push dword screen_buf
-	pushb frame_color
-	call draw_world_frame
+  push dword screen_buf
+  pushb frame_color
+  call draw_world_frame
 
-	push dword GAMESCREEN_SCORES_POS
-	call render_scores
+  push dword GAMESCREEN_SCORES_POS
+  call render_scores
 
-	cmp word [endgame_countdown], -1
-	je .skip_countdown
-	call render_countdown
-	.skip_countdown:
+  cmp word [endgame_countdown], -1
+  je .skip_countdown
+  call render_countdown
+  .skip_countdown:
 
-	call render_snakes
-	call render_targets
+  call render_snakes
+  call render_targets
 
-	call flush_screen_buf
+  call flush_screen_buf
 endfn
 
 ; render snakes ordered from most transparent to least transparent
@@ -1412,92 +1412,92 @@ fn render_snakes
 ; - second byte: the 'snake_t.dead' value of the corresponding snake
 .snake_array: local 6
 
-	xor al, al
-	lea edi, [ebp+.snake_array]
-	mov ecx, 6
-	cld
-	rep stosb
+  xor al, al
+  lea edi, [ebp+.snake_array]
+  mov ecx, 6
+  cld
+  rep stosb
 
-	mov esi, snakes
-	lea edi, [ebp+.snake_array]
-	xor cl, cl
-	.fill_array_loop:
-		mov [edi], cl
-		mov al, [esi+snake_t.dead]
-		mov [edi + 1], al
+  mov esi, snakes
+  lea edi, [ebp+.snake_array]
+  xor cl, cl
+  .fill_array_loop:
+    mov [edi], cl
+    mov al, [esi+snake_t.dead]
+    mov [edi + 1], al
 
-		add esi, snake_t_size
-		add edi, 2
-		inc cl
-		cmp cl, [num_snakes]
-	jb .fill_array_loop
+    add esi, snake_t_size
+    add edi, 2
+    inc cl
+    cmp cl, [num_snakes]
+  jb .fill_array_loop
 
-	; sort '.snake_array' in descending order
-	; NOTE: Because the 'snake_t.dead' value is the MSB of every element, the
-	;       array is sorted from most transparent to least transparent snake.
-	%macro _compare_and_xchg_word 2
-		mov ax, [%1]
-		mov bx, [%2]
-		cmp ax, bx
-		jae %%skip
-		mov [%1], bx
-		mov [%2], ax
-		%%skip:
-	%endmacro
-	_compare_and_xchg_word {ebp+.snake_array}, {ebp+.snake_array + 2}
-	_compare_and_xchg_word {ebp+.snake_array}, {ebp+.snake_array + 4}
-	_compare_and_xchg_word {ebp+.snake_array + 2}, {ebp+.snake_array + 4}
+  ; sort '.snake_array' in descending order
+  ; NOTE: Because the 'snake_t.dead' value is the MSB of every element, the
+  ;       array is sorted from most transparent to least transparent snake.
+  %macro _compare_and_xchg_word 2
+    mov ax, [%1]
+    mov bx, [%2]
+    cmp ax, bx
+    jae %%skip
+    mov [%1], bx
+    mov [%2], ax
+    %%skip:
+  %endmacro
+  _compare_and_xchg_word {ebp+.snake_array}, {ebp+.snake_array + 2}
+  _compare_and_xchg_word {ebp+.snake_array}, {ebp+.snake_array + 4}
+  _compare_and_xchg_word {ebp+.snake_array + 2}, {ebp+.snake_array + 4}
 
-	lea esi, [ebp+.snake_array]
-	movzx ecx, byte [num_snakes]
-	.render_loop:
-		; skip completely dead snakes
-		cmp byte [esi + 1], SNAKE_FADEOUT_TICKS
-		ja .continue
+  lea esi, [ebp+.snake_array]
+  movzx ecx, byte [num_snakes]
+  .render_loop:
+    ; skip completely dead snakes
+    cmp byte [esi + 1], SNAKE_FADEOUT_TICKS
+    ja .continue
 
-		movzx eax, byte [esi]
-		mov ebx, snake_t_size
-		mul ebx
-		lea edi, [snakes + eax]
+    movzx eax, byte [esi]
+    mov ebx, snake_t_size
+    mul ebx
+    lea edi, [snakes + eax]
 
-		mov al, [esi]
-		; there are 'SNAKE_FADEOUT_TICKS + 1' colors for each snake
-		mov bl, SNAKE_FADEOUT_TICKS + 1
-		mul bl
-		add al, snake_head_colors
+    mov al, [esi]
+    ; there are 'SNAKE_FADEOUT_TICKS + 1' colors for each snake
+    mov bl, SNAKE_FADEOUT_TICKS + 1
+    mul bl
+    add al, snake_head_colors
 
-		pushb al
-		push edi
-		call render_snake
+    pushb al
+    push edi
+    call render_snake
 
-		.continue:
-		add esi, 2
-	loop .render_loop
+    .continue:
+    add esi, 2
+  loop .render_loop
 endfn
 fn render_snake
 .snake: arg 4
 .head_color: arg 1
 
-	mov esi, [ebp+.snake]
-	mov bl, [esi+snake_t.dead]
+  mov esi, [ebp+.snake]
+  mov bl, [esi+snake_t.dead]
 
-	; draw snake head (segments 0 to 'SNAKE_HEAD_LEN' - 1)
-	pushb [ebp+.head_color]
-	add [esp], bl ; fadeout
-	push dword SNAKE_HEAD_LEN
-	push dword 0
-	push dword screen_buf
-	push esi
-	call draw_snake_segments_in_range
+  ; draw snake head (segments 0 to 'SNAKE_HEAD_LEN' - 1)
+  pushb [ebp+.head_color]
+  add [esp], bl ; fadeout
+  push dword SNAKE_HEAD_LEN
+  push dword 0
+  push dword screen_buf
+  push esi
+  call draw_snake_segments_in_range
 
-	; draw snake tail (segments SNAKE_HEAD_LEN to 'snake_t.len' - 1)
-	pushb snake_body_colors
-	add [esp], bl ; fadeout
-	push dword [esi+snake_t.len]
-	push dword SNAKE_HEAD_LEN
-	push dword screen_buf
-	push esi
-	call draw_snake_segments_in_range
+  ; draw snake tail (segments SNAKE_HEAD_LEN to 'snake_t.len' - 1)
+  pushb snake_body_colors
+  add [esp], bl ; fadeout
+  push dword [esi+snake_t.len]
+  push dword SNAKE_HEAD_LEN
+  push dword screen_buf
+  push esi
+  call draw_snake_segments_in_range
 endfn
 
 ; draw snake segments from '.start_idx' to '.end_idx' - 1
@@ -1508,151 +1508,151 @@ fn draw_snake_segments_in_range
 .end_idx: arg 4
 .color: arg 1
 
-	mov esi, [ebp+.snake]
+  mov esi, [ebp+.snake]
 
-	mov eax, [ebp+.start_idx]
-	lea eax, [snake_segment_t_size * eax]
-	lea edx, [esi+snake_t.segments + eax]
+  mov eax, [ebp+.start_idx]
+  lea eax, [snake_segment_t_size * eax]
+  lea edx, [esi+snake_t.segments + eax]
 
-	mov ecx, [ebp+.end_idx]
-	sub ecx, [ebp+.start_idx]
-	cmp ecx, 0
-	jle .ret
-	.render_loop:
-		pushb [ebp+.color]
-		push dword [ebp+.out_buf]
-		sub esp, snake_segment_t_size
-		memcpy [esp], [edx], snake_segment_t_size
-		call draw_snake_segment
+  mov ecx, [ebp+.end_idx]
+  sub ecx, [ebp+.start_idx]
+  cmp ecx, 0
+  jle .ret
+  .render_loop:
+    pushb [ebp+.color]
+    push dword [ebp+.out_buf]
+    sub esp, snake_segment_t_size
+    memcpy [esp], [edx], snake_segment_t_size
+    call draw_snake_segment
 
-		add edx, snake_segment_t_size
-	loop .render_loop
+    add edx, snake_segment_t_size
+  loop .render_loop
 
-	.ret:
+  .ret:
 endfn
 fn draw_snake_segment
 .segment: arg snake_segment_t_size
 .out_buf: arg 4
 .color: arg 1
 
-	mov edi, [ebp+.out_buf]
-	add edi, [ebp+.segment+snake_segment_t.pos]
+  mov edi, [ebp+.out_buf]
+  add edi, [ebp+.segment+snake_segment_t.pos]
 
-	; calculate the offset to get to the next pixel of the segment
-	pushb [ebp+.segment+snake_segment_t.dir]
-	; rotate the dir by -pi/2
-	dec byte [esp]
-	and byte [esp], 0b11
-	call get_dir_offset
-	mov ebx, eax
+  ; calculate the offset to get to the next pixel of the segment
+  pushb [ebp+.segment+snake_segment_t.dir]
+  ; rotate the dir by -pi/2
+  dec byte [esp]
+  and byte [esp], 0b11
+  call get_dir_offset
+  mov ebx, eax
 
-	mov ecx, SNAKE_SIZE
-	mov al, [ebp+.color]
-	.loop:
-		mov [edi], al
-		add edi, ebx
-	loop .loop
+  mov ecx, SNAKE_SIZE
+  mov al, [ebp+.color]
+  .loop:
+    mov [edi], al
+    add edi, ebx
+  loop .loop
 endfn
 
 static_assert {ENDGAME_COUNTDOWN_MAX_LENGTH * 2 < 100}
 fn render_countdown
-	push dword endgame_countdown_num_buf
-	push word [endgame_countdown]
-	call num_to_str
+  push dword endgame_countdown_num_buf
+  push word [endgame_countdown]
+  call num_to_str
 
-	pushb text_color
-	push dword GAMESCREEN_COUNTDOWN_SIZE
-	push dword GAMESCREEN_COUNTDOWN_POS
-	cmp word [endgame_countdown], 10
-	jae .skip_shift
-	add dword [esp], GAMESCREEN_COUNTDOWN_SIZE * 8
-	.skip_shift:
-	push dword endgame_countdown_num_buf
-	call draw_str
+  pushb text_color
+  push dword GAMESCREEN_COUNTDOWN_SIZE
+  push dword GAMESCREEN_COUNTDOWN_POS
+  cmp word [endgame_countdown], 10
+  jae .skip_shift
+  add dword [esp], GAMESCREEN_COUNTDOWN_SIZE * 8
+  .skip_shift:
+  push dword endgame_countdown_num_buf
+  call draw_str
 endfn
 
 fn render_targets
-	mov esi, targets
-	movzx ecx, byte [num_targets]
-	.targets_loop:
-		push dword screen_buf
-		pushb target_color
-		push dword [esi]
-		call draw_target
-		add esi, 4
-	loop .targets_loop
+  mov esi, targets
+  movzx ecx, byte [num_targets]
+  .targets_loop:
+    push dword screen_buf
+    pushb target_color
+    push dword [esi]
+    call draw_target
+    add esi, 4
+  loop .targets_loop
 endfn
 fn draw_target
 .pos: arg 4
 .color: arg 1
 .out_buf: arg 4
 
-	mov edi, [ebp+.out_buf]
-	add edi, [ebp+.pos]
+  mov edi, [ebp+.out_buf]
+  add edi, [ebp+.pos]
 
-	mov bl, [ebp+.color]
-	mov cl, TARGET_SIZE
-	.vert_loop:
-		mov ch, TARGET_SIZE
-		.hor_loop:
-			mov [edi], bl
-			inc edi
-			dec ch
-		jnz .hor_loop
-		add edi, FB_WIDTH - TARGET_SIZE
-		dec cl
-	jnz .vert_loop
+  mov bl, [ebp+.color]
+  mov cl, TARGET_SIZE
+  .vert_loop:
+    mov ch, TARGET_SIZE
+    .hor_loop:
+      mov [edi], bl
+      inc edi
+      dec ch
+    jnz .hor_loop
+    add edi, FB_WIDTH - TARGET_SIZE
+    dec cl
+  jnz .vert_loop
 endfn
 
 fn draw_world_frame
 .color: arg 1
 .out_buf: arg 4
 
-	mov bl, [ebp+.color]
+  mov bl, [ebp+.color]
 
-	mov edi, [ebp+.out_buf]
-	mov ecx, WORLD_SIZE
-	.hor_loop:
-		mov byte [edi], bl
-		mov byte [edi + FB_WIDTH * (WORLD_SIZE - 1)], bl
-		inc edi
-	loop .hor_loop
+  mov edi, [ebp+.out_buf]
+  mov ecx, WORLD_SIZE
+  .hor_loop:
+    mov byte [edi], bl
+    mov byte [edi + FB_WIDTH * (WORLD_SIZE - 1)], bl
+    inc edi
+  loop .hor_loop
 
-	mov edi, [ebp+.out_buf]
-	mov ecx, WORLD_SIZE
-	.vert_loop:
-		mov byte [edi], bl
-		mov byte [edi + WORLD_SIZE - 1], bl
-		add edi, FB_WIDTH
-	loop .vert_loop
+  mov edi, [ebp+.out_buf]
+  mov ecx, WORLD_SIZE
+  .vert_loop:
+    mov byte [edi], bl
+    mov byte [edi + WORLD_SIZE - 1], bl
+    add edi, FB_WIDTH
+  loop .vert_loop
 endfn
 
 ; get offset to move one step in the direction '.dir'
 fn get_dir_offset
 .dir: arg 1
 
-	cmp byte [ebp+.dir], 0
-	je .right_dir
-	cmp byte [ebp+.dir], 1
-	je .up_dir
-	cmp byte [ebp+.dir], 2
-	je .left_dir
-	cmp byte [ebp+.dir], 3
-	je .down_dir
-	unreachable
-	.right_dir:
-	mov eax, 1
-	jmp .ret
-	.up_dir:
-	mov eax, -FB_WIDTH
-	jmp .ret
-	.left_dir:
-	mov eax, -1
-	jmp .ret
-	.down_dir:
-	mov eax, FB_WIDTH
+  cmp byte [ebp+.dir], 0
+  je .right_dir
+  cmp byte [ebp+.dir], 1
+  je .up_dir
+  cmp byte [ebp+.dir], 2
+  je .left_dir
+  cmp byte [ebp+.dir], 3
+  je .down_dir
+  unreachable
+  .right_dir:
+  mov eax, 1
+  jmp .ret
+  .up_dir:
+  mov eax, -FB_WIDTH
+  jmp .ret
+  .left_dir:
+  mov eax, -1
+  jmp .ret
+  .down_dir:
+  mov eax, FB_WIDTH
 
-	.ret:
+  .ret:
 endfn
 
 ; ==================================================================================================
@@ -1662,30 +1662,30 @@ endfn
 ; NOTE: Colors are represented using 18-bit RGB, i.e. each color component must
 ;       range from 0 to 63.
 palette:
-	db 0, 0, 0 ; black
+  db 0, 0, 0 ; black
 
-	text_shadow_color_ptr:
-	frame_color_ptr: db 13, 2, 22
-	target_color_ptr: db 44, 6, 6
-	snake_score_colors_ptr:
-	db 16, 28, 15
-	db 15, 16, 28
-	db 28, 15, 16
+  text_shadow_color_ptr:
+  frame_color_ptr: db 13, 2, 22
+  target_color_ptr: db 44, 6, 6
+  snake_score_colors_ptr:
+  db 16, 28, 15
+  db 15, 16, 28
+  db 28, 15, 16
 
-	text_shadow_color2_ptr:
-	db 30, 30, 30
-	text_color_ptr: db 42, 42, 42
+  text_shadow_color2_ptr:
+  db 30, 30, 30
+  text_color_ptr: db 42, 42, 42
 
-	; NOTE: the fadeout colors are calculated in 'setup_palette'
-	snake_body_colors_ptr: db 30, 30, 30
-	times 3 * SNAKE_FADEOUT_TICKS db 0
-	snake_head_colors_ptr:
-	db 9, 20, 8
-	times 3 * SNAKE_FADEOUT_TICKS db 0
-	db 8, 9, 20
-	times 3 * SNAKE_FADEOUT_TICKS db 0
-	db 20, 8, 9
-	times 3 * SNAKE_FADEOUT_TICKS db 0
+  ; NOTE: the fadeout colors are calculated in 'setup_palette'
+  snake_body_colors_ptr: db 30, 30, 30
+  times 3 * SNAKE_FADEOUT_TICKS db 0
+  snake_head_colors_ptr:
+  db 9, 20, 8
+  times 3 * SNAKE_FADEOUT_TICKS db 0
+  db 8, 9, 20
+  times 3 * SNAKE_FADEOUT_TICKS db 0
+  db 20, 8, 9
+  times 3 * SNAKE_FADEOUT_TICKS db 0
 static_assert {($ - palette) <= 255 * 3}
 
 frame_color: equ (frame_color_ptr - palette) / 3
@@ -1702,19 +1702,19 @@ text_shadow_color: equ (text_shadow_color_ptr - palette) / 3
 text_shadow_color2: equ (text_shadow_color2_ptr - palette) / 3
 
 fn setup_palette
-	push dword snake_body_colors_ptr
-	call calculate_snake_fadeout_colors
+  push dword snake_body_colors_ptr
+  call calculate_snake_fadeout_colors
 
-	mov ecx, MAX_SNAKES
-	mov esi, snake_head_colors_ptr
-	.loop:
-		push esi
-		call calculate_snake_fadeout_colors
-		add esi, 3 * (SNAKE_FADEOUT_TICKS + 1)
-	loop .loop
+  mov ecx, MAX_SNAKES
+  mov esi, snake_head_colors_ptr
+  .loop:
+    push esi
+    call calculate_snake_fadeout_colors
+    add esi, 3 * (SNAKE_FADEOUT_TICKS + 1)
+  loop .loop
 
-	push dword palette
-	call set_vga_palette
+  push dword palette
+  call set_vga_palette
 endfn
 ; calculate the fadeout colors
 ; '.colors_ptr' should point to an array of 'SNAKE_FADEOUT_TICKS' + 1 colors.
@@ -1725,23 +1725,23 @@ fn calculate_snake_fadeout_colors
 .base_color: local 3
 .loop_counter: local 1
 
-	mov edi, [ebp+.colors_ptr]
-	memcpy [ebp+.base_color], [edi], 3
+  mov edi, [ebp+.colors_ptr]
+  memcpy [ebp+.base_color], [edi], 3
 
-	mov byte [ebp+.loop_counter], SNAKE_FADEOUT_TICKS
-	.colors_loop:
-		mov ecx, 3
-		.color_components_loop:
-			mov al, [ebp+.base_color + ecx - 1]
-			mul byte [ebp+.loop_counter]
-			mov bl, SNAKE_FADEOUT_TICKS + 1
-			div bl
-			mov [edi + ecx - 1], al
-		loop .color_components_loop
+  mov byte [ebp+.loop_counter], SNAKE_FADEOUT_TICKS
+  .colors_loop:
+    mov ecx, 3
+    .color_components_loop:
+      mov al, [ebp+.base_color + ecx - 1]
+      mul byte [ebp+.loop_counter]
+      mov bl, SNAKE_FADEOUT_TICKS + 1
+      div bl
+      mov [edi + ecx - 1], al
+    loop .color_components_loop
 
-		add edi, 3
-		dec byte [ebp+.loop_counter]
-	jnz .colors_loop
+    add edi, 3
+    dec byte [ebp+.loop_counter]
+  jnz .colors_loop
 endfn
 
 section bss
