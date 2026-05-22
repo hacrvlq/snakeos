@@ -3,7 +3,7 @@
 A bare-metal snake game written in assembly supporting local multiplayer. It can run on any x86
 system capable of 32-bit that has a BIOS.
 
-<video src="https://github.com/user-attachments/assets/6d7ebefe-b932-42b2-9d6b-956cf5de5c59"></video>
+<video src="https://github.com/user-attachments/assets/2726878e-1b93-46af-8f19-ca4d55ac4d23"></video>
 
 # Running
 Pre-built images are available at [Releases](https://github.com/hacrvlq/snakeos/releases).
